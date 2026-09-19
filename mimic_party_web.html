@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mimic Party Web - Voice Imitation Party Game</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              accent: '#f43f5e',
+              neon: '#10b981',
+              amber: '#f59e0b'
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'spin-slow': 'spin 3s linear infinite',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- PeerJS library for simple WebRTC Peer-to-Peer connection -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+    }
+    .font-mono-custom {
+      font-family: 'Space Grotesk', monospace;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+    /* Glassmorphism */
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card {
+      background: rgba(31, 41, 55, 0.5);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    /* Wheel Pointer */
+    .wheel-pointer {
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 30px solid #f43f5e;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-brand-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="w-full glass-panel border-b border-gray-800 sticky top-0 z-40 px-4 py-3">
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="location.hash=''">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-accent flex items-center justify-center shadow-lg shadow-brand-500/30">
+          <i class="fa-solid font-bold fa-microphone-lines text-white text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-gray-200 to-brand-accent bg-clip-text text-transparent">
+            MIMIC PARTY <span class="text-xs px-2 py-0.5 rounded bg-brand-500/20 text-brand-accent border border-brand-accent/30 font-mono-custom">WEB</span>
+          </h1>
+          <p class="text-xs text-gray-400 font-medium">Sound Imitation Voice Battle</p>
+        </div>
+      </div>
+
+      <!-- Room & Connection Info -->
+      <div id="navRoomInfo" class="hidden flex items-center gap-3">
+        <div class="bg-gray-800/80 border border-gray-700/80 px-3 py-1.5 rounded-lg flex items-center gap-2">
+          <span class="text-xs text-gray-400 uppercase font-mono-custom font-semibold">Room Code:</span>
+          <span id="navRoomCode" class="font-mono-custom text-brand-neon font-bold tracking-wider">------</span>
+          <button id="copyLinkBtn" title="Copy Direct Invite Link" class="ml-1 text-gray-400 hover:text-white transition-colors">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <div id="connectionBadge" class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="connectionStatusText">Connected</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-sm"></div>
+
+  <!-- Main View Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 flex flex-col items-center justify-center">
+
+    <!-- VIEW 1: LOBBY & JOIN SCREEN -->
+    <div id="viewLobby" class="w-full max-w-xl space-y-6 my-auto">
+      <div class="text-center space-y-2">
+        <h2 class="text-4xl font-black tracking-tight text-white">IMITATE THE NOISE</h2>
+        <p class="text-gray-400 text-sm max-w-md mx-auto">
+          Match synthesized sound effects using your voice! Highest AI precision score wins. Use sabotages to wreck your friends' attempts.
+        </p>
+      </div>
+
+      <!-- User Profile Box -->
+      <div class="glass-panel p-6 rounded-2xl shadow-2xl border border-gray-800 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase font-mono-custom text-gray-400 mb-1.5">Your Player Name</label>
+          <div class="relative">
+            <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-gray-500"></i>
+            <input type="text" id="inputPlayerName" maxlength="15" placeholder="Enter your nickname" 
+                   class="w-full pl-10 pr-4 py-2.5 bg-gray-900/80 border border-gray-700/80 rounded-xl text-white font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <!-- Create Room Column -->
+          <div class="bg-gray-900/50 p-4 rounded-xl border border-gray-800 flex flex-col justify-between space-y-3">
+            <div>
+              <h3 class="font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-crown text-amber-400"></i> Host New Party
+              </h3>
+              <p class="text-xs text-gray-400 mt-1">Start a game and invite up to 6 friends via link.</p>
+            </div>
+            <button id="btnCreateRoom" class="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-600 text-white font-bold rounded-xl shadow-lg shadow-brand-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+              <i class="fa-solid fa-plus"></i> Create Room
+            </button>
+          </div>
+
+          <!-- Join Room Column -->
+          <div class="bg-gray-900/50 p-4 rounded-xl border border-gray-800 flex flex-col justify-between space-y-3">
+            <div>
+              <h3 class="font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-right-to-bracket text-brand-neon"></i> Join Existing Party
+              </h3>
+              <div class="mt-2">
+                <input type="text" id="inputRoomCode" placeholder="Enter 6-char code" uppercase
+                       class="w-full uppercase px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white font-mono-custom text-center text-sm focus:ring-2 focus:ring-brand-neon outline-none" />
+              </div>
+            </div>
+            <button id="btnJoinRoom" class="w-full py-2.5 px-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+              <i class="fa-solid fa-gamepad"></i> Join Room
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Audio Check -->
+      <div class="glass-card p-4 rounded-xl flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="micTestIcon" class="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center text-gray-400">
+            <i class="fa-solid fa-microphone"></i>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white">Microphone Check</div>
+            <div id="micStatusText" class="text-xs text-gray-400">Click to enable mic preview</div>
+          </div>
+        </div>
+        <button id="btnTestMic" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 font-semibold border border-gray-700">
+          Test Mic
+        </button>
+      </div>
+    </div>
+
+
+    <!-- VIEW 2: ROOM WAITING LOBBY -->
+    <div id="viewWaitingRoom" class="w-full max-w-4xl space-y-6 hidden">
+      <div class="glass-panel p-6 rounded-2xl shadow-xl border border-gray-800 space-y-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-gray-800">
+          <div>
+            <div class="text-xs uppercase font-mono-custom text-gray-400">Party Lobby</div>
+            <h2 class="text-2xl font-black text-white flex items-center gap-3">
+              Room: <span id="waitingRoomCode" class="text-brand-neon font-mono-custom">----</span>
+            </h2>
+          </div>
+          
+          <div class="flex items-center gap-3">
+            <button id="btnCopyInvite" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded-xl border border-gray-700 flex items-center gap-2 transition-all">
+              <i class="fa-solid fa-share-nodes"></i> Share Invite Link
+            </button>
+            <button id="btnLeaveRoom" class="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold rounded-xl border border-rose-500/30">
+              Leave
+            </button>
+          </div>
+        </div>
+
+        <!-- Player List Grid -->
+        <div>
+          <h3 class="text-xs uppercase font-mono-custom font-semibold text-gray-400 mb-3 flex items-center justify-between">
+            <span>Players Connected (<span id="playerCount">1</span>)</span>
+            <span class="text-gray-500 font-normal">Need at least 1 player to start</span>
+          </h3>
+
+          <div id="playerListGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <!-- Dynamic player cards rendered here -->
+          </div>
+        </div>
+
+        <!-- Game Controls for Host -->
+        <div class="pt-4 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div class="flex items-center gap-3 w-full md:w-auto">
+            <label class="text-xs font-semibold text-gray-400 font-mono-custom">Rounds:</label>
+            <select id="selectRounds" class="bg-gray-800 text-white font-bold text-sm px-3 py-1.5 rounded-lg border border-gray-700 outline-none">
+              <option value="3">3 Rounds</option>
+              <option value="5" selected>5 Rounds</option>
+              <option value="8">8 Rounds</option>
+            </select>
+          </div>
+
+          <div id="hostControlsContainer" class="w-full md:w-auto">
+            <button id="btnStartGame" class="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-base rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+              <i class="fa-solid fa-play"></i> Start Party!
+            </button>
+          </div>
+          <div id="clientWaitNotice" class="hidden text-xs text-amber-400 italic font-medium flex items-center gap-2">
+            <i class="fa-solid fa-circle-notch animate-spin"></i> Waiting for host to start the match...
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- VIEW 3: GAMEPLAY ARENA -->
+    <div id="viewGameplay" class="w-full max-w-4xl space-y-6 hidden">
+      <!-- Round & Status Header -->
+      <div class="glass-panel p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 border border-gray-800">
+        <div class="flex items-center gap-3">
+          <span class="px-3 py-1 rounded-full bg-brand-500/20 text-brand-500 font-mono-custom font-extrabold text-xs border border-brand-500/30">
+            ROUND <span id="currentRoundDisplay">1</span> / <span id="maxRoundsDisplay">5</span>
+          </span>
+          <h2 id="phaseStatusText" class="text-lg font-extrabold text-white">
+            Get Ready to Listen!
+          </h2>
+        </div>
+
+        <div id="countdownBadge" class="hidden px-4 py-1.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xl font-mono-custom font-black animate-pulse">
+          <span id="countdownSeconds">3</span>s
+        </div>
+      </div>
+
+      <!-- Main Action Visualizer Display -->
+      <div id="visualizerCard" class="glass-panel p-8 rounded-2xl border border-gray-800 text-center space-y-6 relative overflow-hidden">
+        <div class="relative z-10 space-y-4">
+          <div id="targetSoundTitle" class="text-xs uppercase tracking-widest font-mono-custom font-semibold text-gray-400">
+            Target Sound Pattern
+          </div>
+          <h3 id="targetSoundName" class="text-3xl sm:text-4xl font-black text-white">
+            Synthesizing Pattern...
+          </h3>
+
+          <!-- Active Sabotage Warning Tag -->
+          <div id="activeSabotageTag" class="hidden inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold animate-bounce">
+            <i class="fa-solid fa-biohazard"></i> Sabotage Active: <span id="sabotageNameText">Extreme Echo</span>
+          </div>
+
+          <!-- Canvas Audio Visualizer -->
+          <div class="relative w-full h-36 bg-gray-950/80 rounded-xl overflow-hidden border border-gray-800 shadow-inner flex items-center justify-center">
+            <canvas id="audioVisualizerCanvas" class="w-full h-full block"></canvas>
+            <div id="visualizerOverlayText" class="absolute inset-0 flex items-center justify-center text-gray-500 font-mono-custom text-sm font-semibold pointer-events-none">
+              Audio Waveform Monitor
+            </div>
+          </div>
+
+          <!-- Dynamic Action Buttons -->
+          <div id="actionButtonContainer" class="flex justify-center gap-4 pt-2">
+            <!-- Buttons injected based on phase -->
+            <button id="btnPlayTargetSound" class="px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white font-extrabold rounded-xl shadow-lg shadow-brand-500/30 flex items-center gap-2 transition-all active:scale-95">
+              <i class="fa-solid fa-volume-high"></i> Listen to Target
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Player Progress & Scores Bar -->
+      <div class="glass-panel p-6 rounded-2xl border border-gray-800 space-y-4">
+        <h3 class="text-xs font-mono-custom uppercase font-semibold text-gray-400">Match Leaderboard & Live Status</h3>
+        <div id="gameplayPlayersList" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Dynamically updated player cards -->
+        </div>
+      </div>
+    </div>
+
+
+    <!-- VIEW 4: SABOTAGE WHEEL MODAL / VIEW -->
+    <div id="viewWheel" class="w-full max-w-xl space-y-6 hidden my-auto">
+      <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-gray-800 text-center space-y-6">
+        <div>
+          <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-mono-custom font-bold text-xs border border-amber-500/30">
+            ROUND WINNER PRIZE
+          </span>
+          <h2 class="text-3xl font-black text-white mt-2">SPIN THE SABOTAGE WHEEL!</h2>
+          <p id="wheelWinnerNotice" class="text-sm text-gray-400 mt-1">
+            <span id="wheelWinnerName" class="text-brand-neon font-bold">Player</span> scored highest this round!
+          </p>
+        </div>
+
+        <!-- Canvas Spinning Wheel Container -->
+        <div class="relative w-72 h-72 mx-auto flex items-center justify-center">
+          <div class="wheel-pointer absolute -top-3 z-20"></div>
+          <canvas id="wheelCanvas" width="280" height="280" class="w-full h-full rounded-full border-4 border-gray-800 shadow-2xl"></canvas>
+        </div>
+
+        <!-- Target Selection for Sabotage -->
+        <div id="sabotageTargetSelector" class="hidden space-y-3 bg-gray-900/80 p-4 rounded-xl border border-gray-800">
+          <label class="block text-xs font-semibold uppercase font-mono-custom text-gray-400">
+            Select Opponent to Sabotage:
+          </label>
+          <select id="selectSabotageTarget" class="w-full bg-gray-800 text-white font-bold text-sm p-2.5 rounded-lg border border-gray-700 outline-none">
+            <!-- Opponents options filled dynamically -->
+          </select>
+          <button id="btnApplySabotage" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm rounded-lg shadow-lg transition-all">
+            Apply Sabotage!
+          </button>
+        </div>
+
+        <button id="btnSpinWheel" class="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-extrabold text-base rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all">
+          <i class="fa-solid fa-arrows-spin"></i> SPIN WHEEL!
+        </button>
+      </div>
+    </div>
+
+
+    <!-- VIEW 5: FINAL SCOREBOARD & WINNER -->
+    <div id="viewGameOver" class="w-full max-w-xl space-y-6 hidden my-auto text-center">
+      <div class="glass-panel p-8 rounded-2xl border border-gray-800 space-y-6">
+        <div class="inline-flex p-4 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-4xl mb-2">
+          <i class="fa-solid fa-trophy animate-bounce"></i>
+        </div>
+        
+        <div>
+          <h2 class="text-4xl font-black text-white">MATCH OVER!</h2>
+          <p class="text-gray-400 text-sm mt-1">Final Scores & Voice Champions</p>
+        </div>
+
+        <!-- Leaderboard Podium -->
+        <div id="finalLeaderboard" class="space-y-3 text-left">
+          <!-- Dynamic final rankings -->
+        </div>
+
+        <button id="btnReturnLobby" class="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-extrabold rounded-xl shadow-lg transition-all">
+          Return to Waiting Room
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full glass-panel border-t border-gray-800 py-4 px-4 text-center text-xs text-gray-500">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+      <div>Mimic Party Web &copy; 2026 - P2P Voice Party Game</div>
+      <div class="flex items-center gap-4 text-gray-400">
+        <span><i class="fa-solid fa-microchip text-brand-neon"></i> Web Audio Pitch Match</span>
+        <span><i class="fa-solid fa-network-wired text-brand-500"></i> WebRTC P2P</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    /* ==========================================================================
+       APPLICATION STATE & CONSTANTS
+       ========================================================================== */
+    const STATE = {
+      peer: null,             // PeerJS instance
+      peerId: null,           // Current user's peer ID
+      roomCode: null,         // Current 6-character room code
+      isHost: false,          // Host state flag
+      playerName: 'Player',   // Local player name
+      players: {},            // Connected players map: { peerId: { name, score, isHost, sabotage, status, lastScore } }
+      connections: {},        // Peer connections dictionary
+      audioCtx: null,         // Web Audio Context instance
+      micStream: null,        // User microphone stream
+      analyser: null,         // Audio analyser node
+      visualizerAnimId: null, // Visualizer animation frame handle
+      
+      // Game State
+      gamePhase: 'LOBBY',     // LOBBY, WAITING, TARGET_LISTEN, RECORDING, PLAYBACK, WHEEL, GAMEOVER
+      currentRound: 1,
+      maxRounds: 5,
+      targetSound: null,      // Active target sound configuration
+      recordedBlobs: {},      // { peerId: ArrayBuffer / Blob }
+      playbackQueue: [],      // Queue of peer IDs for audio evaluation phase
+      currentPlaybackPeer: null,
+      
+      // Wheel & Sabotage State
+      wheelSpinning: false,
+      lastWinnerPeerId: null,
+      pendingSabotage: null
+    };
+
+    // Sabotage options definitions
+    const SABOTAGES = [
+      { id: 'helium', name: 'Helium Voice', icon: 'fa-wind', color: '#f43f5e', desc: 'Pitches voice up drastically' },
+      { id: 'echo', name: 'Extreme Echo', icon: 'fa-ghost', color: '#8b5cf6', desc: 'Adds heavy feedback delay' },
+      { id: 'robot', name: 'Robot Bitcrusher', icon: 'fa-robot', color: '#06b6d4', desc: 'Distorts audio into 8-bit' },
+      { id: 'mute', name: 'Mute 1 Second', icon: 'fa-volume-xmark', color: '#f59e0b', desc: 'Silences first second of recording' },
+      { id: 'points', name: '+20 Bonus Points', icon: 'fa-star', color: '#10b981', desc: 'Instant point boost' }
+    ];
+
+    // Synthetic Target Sound Generators definitions
+    const SOUND_PATTERNS = [
+      { name: "Motor Engine Rev", duration: 3.5, type: 'ENGINE', desc: "Low vroom ramping up to a high pitch scream!" },
+      { name: "Laser Gun Zap", duration: 2.5, type: 'LASER', desc: "Pew pew pew! Rapid downward pitch sweeps." },
+      { name: "Bird Chirp Melody", duration: 3.0, type: 'BIRD', desc: "High pitch staccato trills and chirps." },
+      { name: "Siren Pitch Sweep", duration: 3.5, type: 'SIREN', desc: "Oscillating high-low wailing tone." },
+      { name: "Cartoon Boing", duration: 2.5, type: 'BOING', desc: "Low to high elastic spring sound." }
+    ];
+
+    /* ==========================================================================
+       INITIALIZATION & DOM REFERENCES
+       ========================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      initDOM();
+      checkURLInvite();
+      initAudioContext();
+      
+      // Auto-fill random default player name
+      const randomId = Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('inputPlayerName').value = `Player_${randomId}`;
+      STATE.playerName = `Player_${randomId}`;
+    });
+
+    function initDOM() {
+      // Lobby buttons
+      document.getElementById('btnCreateRoom').addEventListener('click', createRoom);
+      document.getElementById('btnJoinRoom').addEventListener('click', () => {
+        const code = document.getElementById('inputRoomCode').value.trim().toUpperCase();
+        if (code) joinRoom(code);
+        else showToast("Please enter a room code", "error");
+      });
+      document.getElementById('btnTestMic').addEventListener('click', testMicrophone);
+
+      // Copy buttons
+      document.getElementById('copyLinkBtn').addEventListener('click', copyInviteLink);
+      document.getElementById('btnCopyInvite').addEventListener('click', copyInviteLink);
+      document.getElementById('btnLeaveRoom').addEventListener('click', leaveRoom);
+
+      // Host Game controls
+      document.getElementById('btnStartGame').addEventListener('click', startMatch);
+
+      // Wheel controls
+      document.getElementById('btnSpinWheel').addEventListener('click', spinSabotageWheel);
+      document.getElementById('btnApplySabotage').addEventListener('click', confirmSabotageSelection);
+
+      // Return Lobby
+      document.getElementById('btnReturnLobby').addEventListener('click', () => {
+        switchView('viewWaitingRoom');
+        STATE.gamePhase = 'WAITING';
+      });
+
+      // Handle URL hash changes
+      window.addEventListener('hashchange', checkURLInvite);
+    }
+
+    function checkURLInvite() {
+      const hash = window.location.hash.replace('#', '').trim().toUpperCase();
+      if (hash.length === 6) {
+        document.getElementById('inputRoomCode').value = hash;
+        showToast(`Room code ${hash} loaded from link!`, 'info');
+      }
+    }
+
+    /* ==========================================================================
+       UTILITIES & TOAST NOTIFICATIONS
+       ========================================================================== */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      
+      const colors = {
+        info: 'bg-gray-800 text-white border-brand-500',
+        success: 'bg-gray-800 text-emerald-400 border-emerald-500',
+        error: 'bg-gray-800 text-rose-400 border-rose-500',
+        warn: 'bg-gray-800 text-amber-400 border-amber-500'
+      };
+
+      toast.className = `px-4 py-3 rounded-xl border-l-4 shadow-xl flex items-center justify-between text-xs font-semibold gap-3 transition-all duration-300 transform translate-x-10 opacity-0 ${colors[type] || colors.info}`;
+      toast.innerHTML = `
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      `;
+
+      container.appendChild(toast);
+      
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-x-10', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-10');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function generateRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    function copyInviteLink() {
+      if (!STATE.roomCode) return;
+      const url = `${window.location.origin}${window.location.pathname}#${STATE.roomCode}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast("Invite link copied to clipboard!", "success");
+      });
+    }
+
+    function switchView(viewId) {
+      const views = ['viewLobby', 'viewWaitingRoom', 'viewGameplay', 'viewWheel', 'viewGameOver'];
+      views.forEach(id => {
+        const el = document.getElementById(id);
+        if (id === viewId) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      });
+    }
+
+    /* ==========================================================================
+       WEB AUDIO API & SYNTHESIS LOGIC
+       ========================================================================== */
+    function initAudioContext() {
+      if (!STATE.audioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        STATE.audioCtx = new AudioCtx();
+      }
+      if (STATE.audioCtx.state === 'suspended') {
+        STATE.audioCtx.resume();
+      }
+    }
+
+    // Microphone access check
+    async function testMicrophone() {
+      initAudioContext();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        STATE.micStream = stream;
+        
+        // Connect to analyser
+        const source = STATE.audioCtx.createMediaStreamSource(stream);
+        STATE.analyser = STATE.audioCtx.createAnalyser();
+        STATE.analyser.fftSize = 256;
+        source.connect(STATE.analyser);
+
+        document.getElementById('micStatusText').innerText = "Microphone Connected!";
+        document.getElementById('micStatusText').classList.add('text-emerald-400');
+        document.getElementById('micTestIcon').className = "w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30";
+        showToast("Microphone ready!", "success");
+
+        // Start testing visualizer canvas loop
+        startVisualizer();
+      } catch (err) {
+        showToast("Microphone access denied or missing!", "error");
+        console.error(err);
+      }
+    }
+
+    // Synthesize target sound patterns dynamically using Web Audio API nodes
+    function playTargetSoundPattern(patternType, onEndedCallback) {
+      initAudioContext();
+      const ctx = STATE.audioCtx;
+      const startTime = ctx.currentTime + 0.1;
+
+      // Setup master gain and analyser for canvas visualizer
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.8, startTime);
+
+      STATE.analyser = ctx.createAnalyser();
+      STATE.analyser.fftSize = 256;
+      masterGain.connect(STATE.analyser);
+      STATE.analyser.connect(ctx.destination);
+
+      startVisualizer();
+
+      if (patternType === 'ENGINE') {
+        // Engine Rev: Low frequency oscillator with distortion/frequency ramp
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(80, startTime);
+        osc.frequency.exponentialRampToValueAtTime(320, startTime + 1.5);
+        osc.frequency.exponentialRampToValueAtTime(100, startTime + 2.5);
+        osc.frequency.exponentialRampToValueAtTime(450, startTime + 3.2);
+
+        osc.connect(masterGain);
+        osc.start(startTime);
+        osc.stop(startTime + 3.5);
+        if (onEndedCallback) setTimeout(onEndedCallback, 3600);
+
+      } else if (patternType === 'LASER') {
+        // Laser Gun Zap: Fast pitch drops repeated 3 times
+        for (let i = 0; i < 3; i++) {
+          const t = startTime + i * 0.7;
+          const osc = ctx.createOscillator();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(800, t);
+          osc.frequency.exponentialRampToValueAtTime(100, t + 0.5);
+
+          const gain = ctx.createGain();
+          gain.gain.setValueAtTime(0.7, t);
+          gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start(t);
+          osc.stop(t + 0.5);
+        }
+        if (onEndedCallback) setTimeout(onEndedCallback, 2600);
+
+      } else if (patternType === 'BIRD') {
+        // Bird Chirp: High pitch Sine frequency modulation
+        const notes = [1200, 1600, 1400, 1800, 2200, 1500];
+        notes.forEach((freq, idx) => {
+          const t = startTime + idx * 0.45;
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          osc.frequency.linearRampToValueAtTime(freq + 300, t + 0.2);
+
+          const gain = ctx.createGain();
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.6, t + 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start(t);
+          osc.stop(t + 0.35);
+        });
+        if (onEndedCallback) setTimeout(onEndedCallback, 3100);
+
+      } else if (patternType === 'SIREN') {
+        // Siren: Oscillating frequency sweep
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, startTime);
+        osc.frequency.linearRampToValueAtTime(900, startTime + 1.2);
+        osc.frequency.linearRampToValueAtTime(400, startTime + 2.4);
+        osc.frequency.linearRampToValueAtTime(900, startTime + 3.5);
+
+        osc.connect(masterGain);
+        osc.start(startTime);
+        osc.stop(startTime + 3.5);
+        if (onEndedCallback) setTimeout(onEndedCallback, 3600);
+
+      } else {
+        // Cartoon Boing: Spring bend sine
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, startTime);
+        osc.frequency.exponentialRampToValueAtTime(800, startTime + 1.8);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.8, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 2.3);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(startTime);
+        osc.stop(startTime + 2.3);
+        if (onEndedCallback) setTimeout(onEndedCallback, 2500);
+      }
+    }
+
+    // Canvas Equalizer Visualizer Loop
+    function startVisualizer() {
+      const canvas = document.getElementById('audioVisualizerCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      
+      // Auto-resize canvas
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+
+      if (STATE.visualizerAnimId) cancelAnimationFrame(STATE.visualizerAnimId);
+
+      function draw() {
+        STATE.visualizerAnimId = requestAnimationFrame(draw);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!STATE.analyser) {
+          // Idle ambient wave line
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(99, 102, 241, 0.3)';
+          ctx.lineWidth = 2;
+          ctx.moveTo(0, canvas.height / 2);
+          for (let x = 0; x < canvas.width; x += 10) {
+            ctx.lineTo(x, canvas.height / 2 + Math.sin(x * 0.05 + Date.now() * 0.005) * 5);
+          }
+          ctx.stroke();
+          return;
+        }
+
+        const bufferLength = STATE.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        STATE.analyser.getByteFrequencyData(dataArray);
+
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let barHeight;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          barHeight = (dataArray[i] / 255) * canvas.height;
+
+          // Gradient colors based on height
+          const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+          gradient.addColorStop(0, '#6366f1');
+          gradient.addColorStop(0.5, '#10b981');
+          gradient.addColorStop(1, '#f43f5e');
+
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+
+          x += barWidth + 1;
+        }
+      }
+      draw();
+    }
+
+    /* ==========================================================================
+       AI / SIGNAL PROCESSING AUDIO SCORER
+       ========================================================================== */
+    async function evaluateAudioMatch(audioBlob, targetSound) {
+      if (!audioBlob) return { score: 10, feedback: "No Voice Recorded!" };
+
+      try {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const userAudioBuffer = await STATE.audioCtx.decodeAudioData(arrayBuffer);
+
+        const channelData = userAudioBuffer.getChannelData(0);
+        const sampleRate = userAudioBuffer.sampleRate;
+        
+        // Extract FFT features and energy envelope
+        let totalVolume = 0;
+        let peakVolume = 0;
+        let zeroCrossings = 0;
+        let pitchChanges = 0;
+        let previousSample = 0;
+
+        const step = Math.floor(channelData.length / 1000) || 1;
+        for (let i = 0; i < channelData.length; i += step) {
+          const absVal = Math.abs(channelData[i]);
+          totalVolume += absVal;
+          if (absVal > peakVolume) peakVolume = absVal;
+
+          // Zero crossing rate as proxy for pitch/frequency estimation
+          if ((channelData[i] >= 0 && previousSample < 0) || (channelData[i] < 0 && previousSample >= 0)) {
+            zeroCrossings++;
+          }
+          previousSample = channelData[i];
+        }
+
+        const avgVolume = totalVolume / (channelData.length / step);
+        const estimatedAvgFreq = (zeroCrossings * sampleRate) / (2 * channelData.length);
+
+        // Target pattern expectation heuristics
+        let targetFreqExpectation = 400;
+        let targetDuration = targetSound.duration || 3.0;
+
+        if (targetSound.type === 'ENGINE') targetFreqExpectation = 250;
+        else if (targetSound.type === 'BIRD') targetFreqExpectation = 1200;
+        else if (targetSound.type === 'LASER') targetFreqExpectation = 600;
+        else if (targetSound.type === 'SIREN') targetFreqExpectation = 500;
+
+        // Score components calculation (0 - 100)
+        let volumeScore = Math.min(100, (peakVolume / 0.15) * 100);
+        let durationDiff = Math.abs(userAudioBuffer.duration - targetDuration);
+        let durationScore = Math.max(20, 100 - (durationDiff * 25));
+
+        // Frequency closeness relative ratio
+        let freqRatio = estimatedAvgFreq / targetFreqExpectation;
+        if (freqRatio > 1) freqRatio = 1 / freqRatio;
+        let pitchScore = Math.min(100, Math.max(30, freqRatio * 100));
+
+        // Weighted final AI Score calculation
+        let finalScore = Math.round((volumeScore * 0.25) + (durationScore * 0.35) + (pitchScore * 0.40));
+        finalScore = Math.min(99, Math.max(12, finalScore)); // Clamp between 12 and 99
+
+        // Witty Feedback generator
+        let feedback = "Decent Attempt!";
+        if (finalScore > 85) feedback = "Pitch Perfect Mastery!";
+        else if (finalScore > 70) feedback = "Spot On Engine Rev!";
+        else if (finalScore > 50) feedback = "Close, But Loud & Wild!";
+        else feedback = "Tone Deaf Masterpiece!";
+
+        return { score: finalScore, feedback };
+
+      } catch (e) {
+        console.error("Audio evaluation error:", e);
+        return { score: Math.floor(Math.random() * 40) + 30, feedback: "Sound Processed!" };
+      }
+    }
+
+    /* ==========================================================================
+       NETWORKING & PEERJS ROOM MANAGEMENT
+       ========================================================================== */
+    function initPeer(customId = null) {
+      return new Promise((resolve, reject) => {
+        STATE.peer = new Peer(customId, {
+          debug: 1
+        });
+
+        STATE.peer.on('open', (id) => {
+          STATE.peerId = id;
+          document.getElementById('connectionStatusText').innerText = "Online";
+          resolve(id);
+        });
+
+        STATE.peer.on('connection', (conn) => {
+          setupConnection(conn);
+        });
+
+        STATE.peer.on('error', (err) => {
+          console.error("PeerJS error:", err);
+          showToast(`Network error: ${err.type}`, "error");
+          reject(err);
+        });
+      });
+    }
+
+    async function createRoom() {
+      const nameInput = document.getElementById('inputPlayerName').value.trim();
+      if (!nameInput) return showToast("Enter your name first!", "error");
+      STATE.playerName = nameInput;
+
+      STATE.roomCode = generateRoomCode();
+      STATE.isHost = true;
+
+      try {
+        await initPeer(`MIMIC-PARTY-${STATE.roomCode}`);
+        
+        // Host self-player record
+        STATE.players = {
+          [STATE.peerId]: {
+            name: STATE.playerName,
+            score: 0,
+            isHost: true,
+            sabotage: null,
+            status: 'Ready',
+            lastScore: 0
+          }
+        };
+
+        updateRoomUI();
+        switchView('viewWaitingRoom');
+        showToast(`Room ${STATE.roomCode} Created!`, "success");
+      } catch (e) {
+        showToast("Failed to create room code. Try again.", "error");
+      }
+    }
+
+    async function joinRoom(code) {
+      const nameInput = document.getElementById('inputPlayerName').value.trim();
+      if (!nameInput) return showToast("Enter your name first!", "error");
+      STATE.playerName = nameInput;
+
+      STATE.roomCode = code.toUpperCase();
+      STATE.isHost = false;
+
+      try {
+        await initPeer(); // Random peer ID for joining client
+        const hostPeerId = `MIMIC-PARTY-${STATE.roomCode}`;
+        const conn = STATE.peer.connect(hostPeerId);
+        
+        setupConnection(conn);
+      } catch (e) {
+        showToast("Could not connect to host room.", "error");
+      }
+    }
+
+    function setupConnection(conn) {
+      STATE.connections[conn.peer] = conn;
+
+      conn.on('open', () => {
+        // Send join handshake
+        sendData(conn, {
+          type: 'JOIN_REQUEST',
+          name: STATE.playerName,
+          peerId: STATE.peerId
+        });
+      });
+
+      conn.on('data', (data) => {
+        handleNetworkData(data, conn);
+      });
+
+      conn.on('close', () => {
+        delete STATE.connections[conn.peer];
+        delete STATE.players[conn.peer];
+        if (STATE.isHost) {
+          broadcastState();
+        } else {
+          showToast("Disconnected from host room.", "error");
+          switchView('viewLobby');
+        }
+        updateRoomUI();
+      });
+    }
+
+    function sendData(conn, data) {
+      if (conn && conn.open) conn.send(data);
+    }
+
+    function broadcastState() {
+      if (!STATE.isHost) return;
+      const statePacket = {
+        type: 'SYNC_STATE',
+        roomCode: STATE.roomCode,
+        players: STATE.players,
+        gamePhase: STATE.gamePhase,
+        currentRound: STATE.currentRound,
+        maxRounds: STATE.maxRounds,
+        targetSound: STATE.targetSound
+      };
+
+      Object.values(STATE.connections).forEach(conn => {
+        sendData(conn, statePacket);
+      });
+
+      updateRoomUI();
+    }
+
+    function handleNetworkData(data, conn) {
+      switch (data.type) {
+        case 'JOIN_REQUEST':
+          if (STATE.isHost) {
+            STATE.players[data.peerId] = {
+              name: data.name,
+              score: 0,
+              isHost: false,
+              sabotage: null,
+              status: 'Ready',
+              lastScore: 0
+            };
+            broadcastState();
+            showToast(`${data.name} joined the room!`, "success");
+          }
+          break;
+
+        case 'SYNC_STATE':
+          STATE.players = data.players;
+          STATE.gamePhase = data.gamePhase;
+          STATE.currentRound = data.currentRound;
+          STATE.maxRounds = data.maxRounds;
+          STATE.targetSound = data.targetSound;
+
+          updateRoomUI();
+          handlePhaseTransition(data.gamePhase);
+          break;
+
+        case 'SUBMIT_RECORDING':
+          // Host receives audio blob buffer from client
+          if (STATE.isHost) {
+            STATE.recordedBlobs[data.peerId] = new Blob([data.audioBuffer], { type: 'audio/webm' });
+            if (STATE.players[data.peerId]) {
+              STATE.players[data.peerId].status = 'Submitted';
+            }
+            broadcastState();
+            checkAllRecordingsSubmitted();
+          }
+          break;
+
+        case 'APPLY_SABOTAGE':
+          if (STATE.isHost) {
+            if (STATE.players[data.targetPeerId]) {
+              STATE.players[data.targetPeerId].sabotage = data.sabotage;
+            }
+            broadcastState();
+          }
+          break;
+
+        case 'START_ROUND_RECORDING':
+          startRecordingCountdown();
+          break;
+
+        case 'PLAY_EVALUATION_AUDIO':
+          playPlaybackAudioSequence(data.peerId, data.audioBuffer, data.score, data.feedback);
+          break;
+      }
+    }
+
+    function leaveRoom() {
+      if (STATE.peer) STATE.peer.destroy();
+      STATE.peer = null;
+      STATE.connections = {};
+      STATE.players = {};
+      STATE.roomCode = null;
+      switchView('viewLobby');
+      document.getElementById('navRoomInfo').classList.add('hidden');
+    }
+
+    /* ==========================================================================
+       ROOM UI & GAME LOBBY RENDERING
+       ========================================================================== */
+    function updateRoomUI() {
+      if (!STATE.roomCode) return;
+
+      // Update Header
+      document.getElementById('navRoomInfo').classList.remove('hidden');
+      document.getElementById('navRoomCode').innerText = STATE.roomCode;
+      document.getElementById('waitingRoomCode').innerText = STATE.roomCode;
+
+      // Update Player Count
+      const playerKeys = Object.keys(STATE.players);
+      document.getElementById('playerCount').innerText = playerKeys.length;
+
+      // Render Player Grid Cards
+      const grid = document.getElementById('playerListGrid');
+      grid.innerHTML = '';
+
+      playerKeys.forEach(pId => {
+        const p = STATE.players[pId];
+        const card = document.createElement('div');
+        card.className = "glass-card p-4 rounded-xl border border-gray-800 flex items-center justify-between";
+        
+        card.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white font-extrabold text-sm shadow">
+              ${p.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div class="font-bold text-sm text-white flex items-center gap-1.5">
+                ${p.name}
+                ${p.isHost ? '<i class="fa-solid fa-crown text-amber-400 text-xs" title="Host"></i>' : ''}
+              </div>
+              <div class="text-xs text-gray-400 font-mono-custom">Score: ${p.score || 0} pts</div>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold font-mono-custom ${
+            p.status === 'Submitted' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-800 text-gray-400'
+          }">
+            ${p.status || 'Ready'}
+          </span>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Host controls visibility
+      if (STATE.isHost) {
+        document.getElementById('hostControlsContainer').classList.remove('hidden');
+        document.getElementById('clientWaitNotice').classList.add('hidden');
+      } else {
+        document.getElementById('hostControlsContainer').classList.add('hidden');
+        document.getElementById('clientWaitNotice').classList.remove('hidden');
+      }
+
+      // Update Gameplay Player Status Cards
+      renderGameplayPlayerCards();
+    }
+
+    function renderGameplayPlayerCards() {
+      const container = document.getElementById('gameplayPlayersList');
+      if (!container) return;
+      container.innerHTML = '';
+
+      Object.keys(STATE.players).forEach(pId => {
+        const p = STATE.players[pId];
+        const item = document.createElement('div');
+        item.className = "bg-gray-900/60 p-3 rounded-xl border border-gray-800 flex items-center justify-between";
+
+        item.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center font-bold text-xs text-brand-neon">
+              ${p.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div class="text-xs font-bold text-white">${p.name}</div>
+              <div class="text-[10px] text-gray-400 font-mono-custom">
+                Last: <span class="text-amber-400">${p.lastScore || 0} pts</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            ${p.sabotage ? `<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 text-[10px] font-bold border border-rose-500/30"><i class="fa-solid fa-biohazard"></i> ${p.sabotage.name}</span>` : ''}
+            <span class="text-sm font-extrabold text-white font-mono-custom">${p.score || 0} pts</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    /* ==========================================================================
+       GAMEPLAY LOOP & STATE MACHINE
+       ========================================================================== */
+    function startMatch() {
+      if (!STATE.isHost) return;
+      STATE.maxRounds = parseInt(document.getElementById('selectRounds').value);
+      STATE.currentRound = 1;
+      
+      // Reset scores
+      Object.keys(STATE.players).forEach(id => {
+        STATE.players[id].score = 0;
+        STATE.players[id].sabotage = null;
+        STATE.players[id].status = 'Ready';
+      });
+
+      startRound();
+    }
+
+    function startRound() {
+      if (!STATE.isHost) return;
+      STATE.gamePhase = 'TARGET_LISTEN';
+      
+      // Pick random sound pattern
+      STATE.targetSound = SOUND_PATTERNS[Math.floor(Math.random() * SOUND_PATTERNS.length)];
+      STATE.recordedBlobs = {};
+
+      Object.keys(STATE.players).forEach(id => {
+        STATE.players[id].status = 'Listening';
+      });
+
+      broadcastState();
+    }
+
+    function handlePhaseTransition(phase) {
+      document.getElementById('currentRoundDisplay').innerText = STATE.currentRound;
+      document.getElementById('maxRoundsDisplay').innerText = STATE.maxRounds;
+
+      if (phase === 'WAITING') {
+        switchView('viewWaitingRoom');
+      } else if (phase === 'TARGET_LISTEN' || phase === 'RECORDING' || phase === 'PLAYBACK') {
+        switchView('viewGameplay');
+        setupGameplayView(phase);
+      } else if (phase === 'WHEEL') {
+        switchView('viewWheel');
+        setupWheelView();
+      } else if (phase === 'GAMEOVER') {
+        switchView('viewGameOver');
+        renderFinalLeaderboard();
+      }
+    }
+
+    function setupGameplayView(phase) {
+      const titleEl = document.getElementById('targetSoundName');
+      const statusText = document.getElementById('phaseStatusText');
+      const btnContainer = document.getElementById('actionButtonContainer');
+      const sabotageTag = document.getElementById('activeSabotageTag');
+
+      // Sabotage check for local player
+      const myPlayer = STATE.players[STATE.peerId];
+      if (myPlayer && myPlayer.sabotage) {
+        sabotageTag.classList.remove('hidden');
+        document.getElementById('sabotageNameText').innerText = myPlayer.sabotage.name;
+      } else {
+        sabotageTag.classList.add('hidden');
+      }
+
+      if (phase === 'TARGET_LISTEN') {
+        statusText.innerText = "Listen Carefully to the Target!";
+        titleEl.innerText = STATE.targetSound.name;
+        
+        btnContainer.innerHTML = `
+          <button id="btnPlayTargetSound" class="px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white font-extrabold rounded-xl shadow-lg shadow-brand-500/30 flex items-center gap-2 transition-all active:scale-95">
+            <i class="fa-solid fa-volume-high"></i> Play Sound Pattern
+          </button>
+        `;
+
+        document.getElementById('btnPlayTargetSound').addEventListener('click', () => {
+          playTargetSoundPattern(STATE.targetSound.type);
+        });
+
+        // Host trigger start recording button
+        if (STATE.isHost) {
+          btnContainer.innerHTML += `
+            <button id="btnHostStartRecord" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-500/30 flex items-center gap-2 transition-all active:scale-95">
+              <i class="fa-solid fa-microphone"></i> Start Voice Record Phase
+            </button>
+          `;
+          document.getElementById('btnHostStartRecord').addEventListener('click', () => {
+            Object.values(STATE.connections).forEach(conn => {
+              sendData(conn, { type: 'START_ROUND_RECORDING' });
+            });
+            startRecordingCountdown();
+          });
+        }
+
+      } else if (phase === 'RECORDING') {
+        statusText.innerText = "Recording Voices!";
+        btnContainer.innerHTML = `
+          <div class="text-sm font-mono-custom text-amber-400 font-bold animate-pulse">
+            <i class="fa-solid fa-circle text-rose-500"></i> Recording in progress... Match the sound!
+          </div>
+        `;
+      } else if (phase === 'PLAYBACK') {
+        statusText.innerText = "Evaluating AI Mimic Scores!";
+        btnContainer.innerHTML = `
+          <div class="text-sm font-mono-custom text-brand-neon font-bold">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Calculating Spectrogram Match...
+          </div>
+        `;
+      }
+    }
+
+    /* ==========================================================================
+       RECORDING & SABOTAGE FILTERS
+       ========================================================================== */
+    async function startRecordingCountdown() {
+      const countdownBadge = document.getElementById('countdownBadge');
+      const secondsEl = document.getElementById('countdownSeconds');
+      countdownBadge.classList.remove('hidden');
+
+      let count = 3;
+      secondsEl.innerText = count;
+
+      const timer = setInterval(() => {
+        count--;
+        if (count > 0) {
+          secondsEl.innerText = count;
+        } else {
+          clearInterval(timer);
+          countdownBadge.classList.add('hidden');
+          executeVoiceRecording();
+        }
+      }, 1000);
+    }
+
+    async function executeVoiceRecording() {
+      try {
+        if (!STATE.micStream) {
+          STATE.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+
+        initAudioContext();
+        
+        // Apply Web Audio DSP Sabotage Filters if active
+        const mySabotage = STATE.players[STATE.peerId]?.sabotage;
+        let finalStreamSource = STATE.audioCtx.createMediaStreamSource(STATE.micStream);
+        let destinationNode = STATE.audioCtx.createMediaStreamDestination();
+
+        if (mySabotage) {
+          if (mySabotage.id === 'echo') {
+            const delay = STATE.audioCtx.createDelay();
+            delay.delayTime.value = 0.3;
+            const feedback = STATE.audioCtx.createGain();
+            feedback.gain.value = 0.6;
+
+            finalStreamSource.connect(delay);
+            delay.connect(feedback);
+            feedback.connect(delay);
+            delay.connect(destinationNode);
+          } else if (mySabotage.id === 'robot') {
+            const waveShaper = STATE.audioCtx.createWaveShaper();
+            // Simple bitcrusher distortion curve
+            const k = 50;
+            const curve = new Float32Array(44100);
+            for (let i = 0; i < 44100; i++) {
+              const x = (i * 2) / 44100 - 1;
+              curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+            }
+            waveShaper.curve = curve;
+            finalStreamSource.connect(waveShaper);
+            waveShaper.connect(destinationNode);
+          } else {
+            finalStreamSource.connect(destinationNode);
+          }
+        } else {
+          finalStreamSource.connect(destinationNode);
+        }
+
+        const mediaRecorder = new MediaRecorder(destinationNode.stream);
+        const chunks = [];
+
+        mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          const recordedBlob = new Blob(chunks, { type: 'audio/webm' });
+          const buffer = await recordedBlob.arrayBuffer();
+
+          if (STATE.isHost) {
+            STATE.recordedBlobs[STATE.peerId] = recordedBlob;
+            STATE.players[STATE.peerId].status = 'Submitted';
+            broadcastState();
+            checkAllRecordingsSubmitted();
+          } else {
+            const hostConn = Object.values(STATE.connections)[0];
+            sendData(hostConn, {
+              type: 'SUBMIT_RECORDING',
+              peerId: STATE.peerId,
+              audioBuffer: buffer
+            });
+          }
+        };
+
+        // Start recording for target duration
+        const duration = (STATE.targetSound.duration || 3.0) * 1000;
+        mediaRecorder.start();
+        
+        // Mute 1 sec sabotage check
+        if (mySabotage && mySabotage.id === 'mute') {
+          showToast("Sabotage Active: First 1s Muted!", "warn");
+        }
+
+        setTimeout(() => {
+          mediaRecorder.stop();
+        }, duration);
+
+      } catch (e) {
+        console.error("Recording error:", e);
+        showToast("Microphone error during recording phase", "error");
+      }
+    }
+
+    function checkAllRecordingsSubmitted() {
+      if (!STATE.isHost) return;
+      const allDone = Object.keys(STATE.players).every(id => STATE.players[id].status === 'Submitted');
+
+      if (allDone) {
+        STATE.gamePhase = 'PLAYBACK';
+        broadcastState();
+        processEvaluationSequence();
+      }
+    }
+
+    /* ==========================================================================
+       PLAYBACK & EVALUATION SEQUENCE
+       ========================================================================== */
+    async function processEvaluationSequence() {
+      if (!STATE.isHost) return;
+
+      const playerIds = Object.keys(STATE.players);
+      let highestScore = -1;
+      let roundWinnerId = playerIds[0];
+
+      for (const pId of playerIds) {
+        const blob = STATE.recordedBlobs[pId];
+        const evalResult = await evaluateAudioMatch(blob, STATE.targetSound);
+
+        // Apply bonus points sabotage if awarded
+        if (STATE.players[pId].sabotage?.id === 'points') {
+          evalResult.score = Math.min(100, evalResult.score + 20);
+        }
+
+        // Helium pitch multiplier score modifier
+        if (STATE.players[pId].sabotage?.id === 'helium') {
+          evalResult.score = Math.max(10, evalResult.score - 15);
+        }
+
+        STATE.players[pId].lastScore = evalResult.score;
+        STATE.players[pId].score = (STATE.players[pId].score || 0) + evalResult.score;
+
+        if (evalResult.score > highestScore) {
+          highestScore = evalResult.score;
+          roundWinnerId = pId;
+        }
+
+        // Convert blob to arrayBuffer for transport
+        let arrayBuf = null;
+        if (blob) arrayBuf = await blob.arrayBuffer();
+
+        // Broadcast audio playback to all clients
+        const packet = {
+          type: 'PLAY_EVALUATION_AUDIO',
+          peerId: pId,
+          audioBuffer: arrayBuf,
+          score: evalResult.score,
+          feedback: evalResult.feedback
+        };
+
+        Object.values(STATE.connections).forEach(conn => sendData(conn, packet));
+        playPlaybackAudioSequence(pId, arrayBuf, evalResult.score, evalResult.feedback);
+
+        // Delay between player playbacks
+        await new Promise(r => setTimeout(r, 4500));
+      }
+
+      // Reset sabotages after round
+      Object.keys(STATE.players).forEach(id => {
+        STATE.players[id].sabotage = null;
+        STATE.players[id].status = 'Ready';
+      });
+
+      STATE.lastWinnerPeerId = roundWinnerId;
+
+      // Check if game over or wheel spin phase
+      setTimeout(() => {
+        if (STATE.currentRound >= STATE.maxRounds) {
+          STATE.gamePhase = 'GAMEOVER';
+        } else {
+          STATE.gamePhase = 'WHEEL';
+        }
+        broadcastState();
+      }, 1000);
+    }
+
+    function playPlaybackAudioSequence(peerId, audioBuffer, score, feedback) {
+      const playerName = STATE.players[peerId]?.name || 'Player';
+      showToast(`${playerName} scored ${score} pts! "${feedback}"`, "info");
+
+      if (audioBuffer) {
+        STATE.audioCtx.decodeAudioData(audioBuffer.slice(0)).then(decodedData => {
+          const source = STATE.audioCtx.createBufferSource();
+          source.buffer = decodedData;
+
+          STATE.analyser = STATE.audioCtx.createAnalyser();
+          STATE.analyser.fftSize = 256;
+          source.connect(STATE.analyser);
+          STATE.analyser.connect(STATE.audioCtx.destination);
+
+          startVisualizer();
+          source.start();
+        }).catch(e => console.error(e));
+      }
+    }
+
+    /* ==========================================================================
+       SABOTAGE WHEEL CANVAS
+       ========================================================================== */
+    function setupWheelView() {
+      const winnerName = STATE.players[STATE.lastWinnerPeerId]?.name || 'Winner';
+      document.getElementById('wheelWinnerName').innerText = winnerName;
+
+      drawWheel(0);
+
+      // Sabotage target selection dropdown
+      const select = document.getElementById('selectSabotageTarget');
+      select.innerHTML = '';
+
+      Object.keys(STATE.players).forEach(pId => {
+        if (pId !== STATE.lastWinnerPeerId) {
+          const opt = document.createElement('option');
+          opt.value = pId;
+          opt.innerText = STATE.players[pId].name;
+          select.appendChild(opt);
+        }
+      });
+
+      // Enable spin button only for round winner or host
+      const btnSpin = document.getElementById('btnSpinWheel');
+      if (STATE.peerId === STATE.lastWinnerPeerId || (STATE.isHost && !STATE.players[STATE.lastWinnerPeerId])) {
+        btnSpin.classList.remove('hidden');
+      } else {
+        btnSpin.classList.add('hidden');
+      }
+      
+      document.getElementById('sabotageTargetSelector').classList.add('hidden');
+    }
+
+    function drawWheel(angle) {
+      const canvas = document.getElementById('wheelCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const numSlices = SABOTAGES.length;
+      const sliceAngle = (2 * Math.PI) / numSlices;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(angle);
+
+      SABOTAGES.forEach((sabotage, idx) => {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, canvas.width / 2, idx * sliceAngle, (idx + 1) * sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = sabotage.color;
+        ctx.fill();
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Draw text label inside wheel slice
+        ctx.save();
+        ctx.rotate(idx * sliceAngle + sliceAngle / 2);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Outfit, sans-serif';
+        ctx.fillText(sabotage.name, canvas.width / 2 - 15, 4);
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    function spinSabotageWheel() {
+      if (STATE.wheelSpinning) return;
+      STATE.wheelSpinning = true;
+
+      document.getElementById('btnSpinWheel').classList.add('hidden');
+
+      let currentAngle = 0;
+      const spinDegrees = 1440 + Math.floor(Math.random() * 360); // At least 4 full spins
+      const duration = 4000;
+      const startTime = performance.now();
+
+      function animateSpin(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / duration);
+        // Ease out cubic
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        
+        currentAngle = easeOut * (spinDegrees * (Math.PI / 180));
+        drawWheel(currentAngle);
+
+        if (progress < 1) {
+          requestAnimationFrame(animateSpin);
+        } else {
+          STATE.wheelSpinning = false;
+          
+          // Determine winning slice index
+          const normalizedAngle = (2 * Math.PI) - (currentAngle % (2 * Math.PI));
+          const sliceAngle = (2 * Math.PI) / SABOTAGES.length;
+          const winningIdx = Math.floor(normalizedAngle / sliceAngle) % SABOTAGES.length;
+          
+          const wonSabotage = SABOTAGES[winningIdx];
+          STATE.pendingSabotage = wonSabotage;
+
+          showToast(`Wheel landed on: ${wonSabotage.name}!`, "success");
+
+          // Display target selection
+          if (wonSabotage.id !== 'points') {
+            document.getElementById('sabotageTargetSelector').classList.remove('hidden');
+          } else {
+            // Instant bonus points
+            if (STATE.isHost) {
+              STATE.players[STATE.lastWinnerPeerId].score += 20;
+              broadcastState();
+            }
+            setTimeout(proceedNextRound, 2000);
+          }
+        }
+      }
+      requestAnimationFrame(animateSpin);
+    }
+
+    function confirmSabotageSelection() {
+      const targetPeerId = document.getElementById('selectSabotageTarget').value;
+      if (!targetPeerId) return;
+
+      const packet = {
+        type: 'APPLY_SABOTAGE',
+        targetPeerId: targetPeerId,
+        sabotage: STATE.pendingSabotage
+      };
+
+      if (STATE.isHost) {
+        STATE.players[targetPeerId].sabotage = STATE.pendingSabotage;
+        broadcastState();
+      } else {
+        const hostConn = Object.values(STATE.connections)[0];
+        sendData(hostConn, packet);
+      }
+
+      showToast(`Applied ${STATE.pendingSabotage.name} to target player!`, "warn");
+      document.getElementById('sabotageTargetSelector').classList.add('hidden');
+
+      setTimeout(proceedNextRound, 1500);
+    }
+
+    function proceedNextRound() {
+      if (!STATE.isHost) return;
+      STATE.currentRound++;
+      startRound();
+    }
+
+    /* ==========================================================================
+       FINAL LEADERBOARD & GAME OVER
+       ========================================================================== */
+    function renderFinalLeaderboard() {
+      const container = document.getElementById('finalLeaderboard');
+      container.innerHTML = '';
+
+      // Sort players by total score descending
+      const sorted = Object.values(STATE.players).sort((a, b) => (b.score || 0) - (a.score || 0));
+
+      sorted.forEach((p, rank) => {
+        const row = document.createElement('div');
+        const isWinner = rank === 0;
+
+        row.className = `p-4 rounded-xl border flex items-center justify-between ${
+          isWinner ? 'bg-amber-500/10 border-amber-500/40 shadow-lg' : 'glass-card border-gray-800'
+        }`;
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg ${isWinner ? 'bg-amber-500 text-gray-950 font-black' : 'bg-gray-800 text-gray-400 font-bold'} flex items-center justify-center font-mono-custom text-sm">
+              #${rank + 1}
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-base flex items-center gap-2">
+                ${p.name}
+                ${isWinner ? '<i class="fa-solid fa-crown text-amber-400"></i>' : ''}
+              </div>
+            </div>
+          </div>
+          <div class="text-xl font-black text-brand-neon font-mono-custom">${p.score || 0} pts</div>
+        `;
+        container.appendChild(row);
+      });
+    }
+  </script>
+</body>
+</html>
