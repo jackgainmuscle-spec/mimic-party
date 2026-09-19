@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mimic Party</title>
+<meta name="theme-color" content="#120e24">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#120e24; --text:#f4f1ff; --muted:#aaa2d1; --line:rgba(255,255,255,.14);
+  --glass:rgba(255,255,255,.07); --pink:#ff5c93; --blue:#5b8cff; --amber:#ffc857;
+  --mint:#5ef0c0; --violet:#b58cff; --bad:#ff6b6b;
+  --font:'Bricolage Grotesque',ui-rounded,'SF Pro Rounded','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:dark}
+body{margin:0;min-height:100dvh;background:var(--ink);color:var(--text);font:400 1rem/1.5 var(--font);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3,p{margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--muted)}
+.hint{color:var(--muted);font-size:.9rem}
+
+/* background orbs */
+.orbs i{position:fixed;border-radius:50%;filter:blur(90px);opacity:.5;z-index:0;pointer-events:none}
+.orbs i:nth-child(1){width:46vmax;height:46vmax;left:-14vmax;top:-16vmax;background:#ff3d81}
+.orbs i:nth-child(2){width:40vmax;height:40vmax;right:-12vmax;top:10vh;background:#3b62ff}
+.orbs i:nth-child(3){width:34vmax;height:34vmax;left:26vw;bottom:-20vmax;background:#8a3dff}
+
+.shell{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:max(1rem,env(safe-area-inset-top)) 1rem max(1.5rem,env(safe-area-inset-bottom))}
+.top{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.4rem .2rem 1.2rem}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:800;font-size:1.35rem;letter-spacing:-.02em}
+.top-tools{display:flex;align-items:center;gap:.8rem}
+.vol{display:flex;align-items:center;gap:.4rem;color:var(--muted)}
+.vol input{width:96px;accent-color:var(--pink)}
+
+.glass{background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.04));border:1px solid var(--line);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-radius:28px;box-shadow:0 20px 60px rgba(5,2,20,.45),inset 0 1px 0 rgba(255,255,255,.12)}
+.panel{padding:1.3rem 1.3rem 1.4rem}
+.panel h2{font-size:1.25rem;font-weight:800;letter-spacing:-.01em;margin-bottom:.8rem;display:flex;align-items:baseline;gap:.5rem}
+.count{color:var(--muted);font-weight:400;font-size:.95rem}
+
+.btn{font:inherit;font-weight:700;color:var(--text);background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:999px;padding:.7em 1.3em;cursor:pointer;transition:transform .12s,background .2s}
+.btn:hover{background:rgba(255,255,255,.17)}
+.btn:active{transform:scale(.97)}
+.btn:focus-visible,input:focus-visible,summary:focus-visible,.drop:focus-within{outline:3px solid var(--amber);outline-offset:3px}
+.btn.primary{background:var(--pink);border-color:transparent;color:#1d0a15;box-shadow:0 10px 30px rgba(255,92,147,.35)}
+.btn.primary:hover{background:#ff76a6}
+.btn.small{padding:.4em .9em;font-size:.88rem}
+.btn.big{font-size:1.15rem;padding:.85em 1.9em}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+/* connect */
+.center-card{max-width:520px;margin:12vh auto 0;padding:2.4rem;text-align:center;display:grid;gap:1rem;justify-items:center}
+.center-card h1{font-size:clamp(1.6rem,5vw,2.2rem);font-weight:800;letter-spacing:-.02em}
+.spinner{width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:var(--pink);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* lobby */
+.hero{padding:1.6rem 1.6rem 1.4rem;display:grid;gap:1.1rem;margin-bottom:1.1rem}
+.hero h1{font-size:clamp(2rem,6vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.05}
+.hero .lede{color:var(--muted);max-width:56ch;margin-top:.5rem}
+.share{display:flex;gap:.6rem;flex-wrap:wrap}
+.share input{flex:1 1 260px;min-width:0;font:inherit;color:var(--text);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:999px;padding:.7em 1.1em}
+.joinbox summary{cursor:pointer;color:var(--muted);font-size:.9rem;width:fit-content}
+.joinbox .row{display:flex;gap:.5rem;margin-top:.6rem}
+.joinbox input{font:inherit;color:var(--text);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:999px;padding:.4em 1em;min-width:0}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:1.1rem}
+.plist,.clist,.rank{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}
+.pitem{display:flex;align-items:center;gap:.7rem;padding:.55rem .7rem;border-radius:16px;background:rgba(255,255,255,.05)}
+.pitem.away{opacity:.45}
+.avatar{flex:none;width:2.2rem;height:2.2rem;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#180b1f;background:var(--pc,#fff)}
+.pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.name-input{flex:1;min-width:0;font:inherit;font-weight:600;color:var(--text);background:transparent;border:1px dashed var(--line);border-radius:10px;padding:.15rem .5rem}
+.chip{font-size:.78rem;padding:.15rem .6rem;border-radius:999px;background:rgba(255,255,255,.1);color:var(--muted);white-space:nowrap}
+.chip.ok{background:rgba(94,240,192,.16);color:var(--mint)}
+.chip.warn{background:rgba(255,200,87,.14);color:var(--amber)}
+.mic-box{margin-top:1rem;display:grid;gap:.6rem;justify-items:start}
+.meter{width:100%;height:10px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+.meter i{display:block;height:100%;width:100%;background:var(--mint);transform-origin:left;transform:scaleX(0)}
+.drop{display:grid;gap:.15rem;justify-items:center;text-align:center;padding:1.1rem;margin:.7rem 0;border:2px dashed var(--line);border-radius:22px;cursor:pointer;transition:background .2s,border-color .2s}
+.drop.over,.drop:hover{background:rgba(255,255,255,.06);border-color:var(--pink)}
+.drop span{color:var(--muted);font-size:.9rem}
+.citem{display:flex;align-items:center;gap:.7rem;padding:.6rem .8rem;border-radius:16px;background:rgba(255,255,255,.05)}
+.cnum{flex:none;font-size:.78rem;padding:.15rem .6rem;border-radius:999px;background:rgba(255,92,147,.18);color:var(--pink);font-weight:700}
+.cmain{flex:1;min-width:0;display:grid}
+.cmain strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmain .muted{font-size:.85rem}
+.trim-l{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--muted);margin-top:.2rem}
+.trim-l input{flex:1;min-width:60px;accent-color:var(--amber)}
+.empty{color:var(--muted);padding:.4rem .2rem}
+.startbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.1rem;padding:0 .3rem}
+
+/* game */
+.game-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:1.1rem;align-items:start}
+.stage-wrap{padding:1rem 1rem 1.4rem;position:relative}
+.round-chip{font-size:.9rem;color:var(--muted);padding:.2rem .6rem}
+.banner{display:grid;gap:.5rem;margin:.4rem 0 .2rem}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;padding:.6rem 1rem;border-radius:16px;background:rgba(255,200,87,.13);border:1px solid rgba(255,200,87,.35);font-size:.92rem}
+.alert.bad{background:rgba(255,92,147,.15);border-color:rgba(255,92,147,.45)}
+.stage{min-height:440px;padding:clamp(1rem,3vw,2rem);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center}
+.stage-title{font-size:clamp(1.7rem,4.5vw,2.5rem);font-weight:800;letter-spacing:-.02em}
+.dots{display:flex;gap:.5rem}
+.dots i{width:12px;height:12px;border-radius:50%;background:var(--pink);animation:bounce 1s infinite}
+.dots i:nth-child(2){animation-delay:.15s;background:var(--amber)}
+.dots i:nth-child(3){animation-delay:.3s;background:var(--mint)}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-12px)}}
+.ring{--lvl:0;width:min(58vw,250px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 50% 38%,rgba(255,255,255,.4),rgba(91,140,255,.55) 55%,rgba(255,92,147,.4));box-shadow:0 0 0 calc(var(--lvl)*70px) rgba(255,92,147,.22),0 0 80px rgba(91,140,255,.5);transform:scale(calc(1 + var(--lvl)*.22));transition:transform .06s linear}
+.cd{font-size:clamp(7rem,30vw,12rem);font-weight:800;line-height:1;color:var(--amber);min-width:1.2ch}
+.cd.pop{animation:pop .9s ease-out}
+@keyframes pop{0%{transform:scale(.4);opacity:0}20%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:1}}
+.rec-badge{display:inline-flex;align-items:center;gap:.7rem;font-size:clamp(2rem,8vw,4rem);font-weight:800;letter-spacing:.04em;background:rgba(255,69,96,.18);border:1px solid rgba(255,90,110,.55);padding:.25em .7em;border-radius:999px}
+.rec-dot{width:.6em;height:.6em;border-radius:50%;background:#ff4560;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(.6);opacity:.5}}
+.bar{width:min(100%,420px);height:12px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
+.bar i{display:block;height:100%;background:#ff4560;transform-origin:left;transform:scaleX(0)}
+.meter.big{width:min(100%,420px);height:14px}
+
+.reveal-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:1.4rem;width:100%;text-align:left;align-items:start}
+.contour-slot{min-height:190px;display:grid;align-items:center}
+.contour{width:100%;height:auto;display:block}
+.contour .grid line{stroke:rgba(255,255,255,.09);stroke-width:1}
+.c-target{fill:none;stroke:rgba(255,255,255,.38);stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
+.c-player{fill:none;stroke:var(--pc);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.6s ease-out .15s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin-top:.4rem}
+.legend .sw{display:inline-block;width:1.2rem;height:.4rem;border-radius:9px;margin-right:.4rem;vertical-align:middle;background:var(--pc)}
+.legend .sw.t{background:rgba(255,255,255,.4)}
+.np-info{margin-top:.8rem;display:grid;gap:.5rem;min-height:120px}
+.who{display:flex;align-items:center;gap:.7rem;font-size:1.15rem}
+.score-line{display:flex;align-items:baseline;gap:.6rem}
+.bigscore{font-size:clamp(3.4rem,10vw,5.2rem);font-weight:800;line-height:1;color:var(--amber);animation:pop .6s ease-out}
+.outof{color:var(--muted)}
+.fb{font-size:1.1rem;font-weight:600}
+.stats{display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.9rem}
+.tags{display:flex;gap:.4rem;flex-wrap:wrap}
+.tag{font-size:.8rem;padding:.15rem .65rem;border-radius:999px;border:1px solid var(--tc,var(--line));color:var(--text);background:rgba(255,255,255,.06)}
+.rrow{width:100%;display:flex;align-items:center;gap:.6rem;font:inherit;color:var(--text);text-align:left;padding:.5rem .7rem;border-radius:16px;border:1px solid transparent;background:rgba(255,255,255,.05);cursor:pointer}
+.rrow:disabled{cursor:default;color:var(--text)}
+.rrow.on{border-color:var(--pc);background:rgba(255,255,255,.1)}
+.rname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.rscore{font-weight:800;font-size:1.1rem;min-width:2ch;text-align:right}
+.wheel-col{margin-top:1.2rem;display:grid;gap:.8rem;justify-items:center;text-align:center}
+.wheel-col h3{font-size:1.1rem;font-weight:800}
+.wheel-wrap{position:relative;width:min(72vw,270px);aspect-ratio:1;margin-top:.6rem}
+.pointer{position:absolute;top:-12px;left:50%;transform:translateX(-50%);border-left:14px solid transparent;border-right:14px solid transparent;border-top:26px solid var(--amber);z-index:2;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5))}
+.wheel{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#5b8cff 0 25%,#ff5c93 25% 50%,#ffc857 50% 75%,#5ef0c0 75% 100%);border:5px solid rgba(255,255,255,.25);box-shadow:0 10px 40px rgba(0,0,0,.4);transition:transform 4.4s cubic-bezier(.12,.7,.08,1)}
+.wheel::after{content:"";position:absolute;inset:37%;border-radius:50%;background:var(--ink);border:4px solid rgba(255,255,255,.2)}
+.seg{position:absolute;inset:0}
+.seg span{position:absolute;top:8%;left:50%;transform:translateX(-50%);width:84px;display:grid;justify-items:center;font-size:.72rem;font-weight:800;line-height:1.1;color:#170c22}
+.seg span em{font-style:normal;font-size:1.5rem}
+.wheel-ctl{display:grid;gap:.6rem;justify-items:center;width:100%}
+.victims{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
+.victims .btn{border-color:var(--pc)}
+.armed{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font-size:.88rem;color:var(--muted)}
+.next-slot{display:flex;align-items:center;justify-content:center;gap:1rem;margin-top:1.4rem;width:100%;flex-wrap:wrap}
+
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{padding:.4rem .5rem;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{color:var(--muted);font-weight:600;border-bottom:1px solid var(--line)}
+tbody th{font-weight:600}
+tbody tr+tr th,tbody tr+tr td{border-top:1px solid rgba(255,255,255,.06)}
+tr.away{opacity:.45}
+.dot{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;background:var(--pc);margin-right:.5rem}
+td.tot{font-weight:800;color:var(--amber)}
+
+/* final */
+.final{padding:2rem clamp(1rem,4vw,2.4rem);display:grid;gap:1.4rem;justify-items:center;text-align:center}
+.final h1{font-size:clamp(2rem,6vw,3.4rem);font-weight:800;letter-spacing:-.03em}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:1rem;margin:1rem 0}
+.pod{display:grid;justify-items:center;gap:.3rem;width:min(28vw,150px)}
+.pod.p1{order:2}.pod.p2{order:1}.pod.p3{order:3}
+.pod .pbar{width:100%;border-radius:16px 16px 6px 6px;background:linear-gradient(180deg,var(--pc),rgba(255,255,255,.08))}
+.ptotal{font-weight:800;font-size:1.4rem;color:var(--amber)}
+.final .tablewrap{width:100%;max-width:640px;text-align:left}
+
+#toasts{position:fixed;left:50%;bottom:max(1rem,env(safe-area-inset-bottom));transform:translateX(-50%);display:grid;gap:.5rem;z-index:50;width:min(92vw,420px)}
+.toast{background:rgba(30,22,60,.94);border:1px solid var(--line);padding:.7rem 1.1rem;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .3s ease-out;transition:opacity .4s}
+.toast.out{opacity:0}
+
+@media (max-width:820px){
+  .cols,.game-grid,.reveal-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{min-height:360px}
+}
+@media (prefers-reduced-motion:reduce){
+  .rec-dot,.dots i,.spinner,.toast,.bigscore,.cd.pop{animation:none}
+  .c-player{animation:none;stroke-dashoffset:0}
+  .wheel{transition-duration:.5s}
+  .ring{transition:none}
+}
+</style>
+</head>
+<body>
+<noscript>Mimic Party needs JavaScript.</noscript>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="shell">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><rect x="2" y="14" width="5" height="12" rx="2.5" fill="#ff5c93"/><rect x="11" y="6" width="5" height="28" rx="2.5" fill="#ffc857"/><rect x="20" y="10" width="5" height="20" rx="2.5" fill="#5ef0c0"/><rect x="29" y="3" width="5" height="34" rx="2.5" fill="#5b8cff"/></svg>
+      <span>Mimic Party</span>
+    </div>
+    <div class="top-tools">
+      <label class="vol"><span class="sr">Volume</span>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+        <input id="vol" type="range" min="0" max="1" step="0.05" value="0.9">
+      </label>
+      <button class="btn small" id="btn-end" hidden>End game</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Connecting / errors -->
+    <section id="v-connect" class="glass center-card" hidden>
+      <div class="spinner" id="conn-spin"></div>
+      <h1 id="conn-title">Setting up your room</h1>
+      <p class="muted" id="conn-sub"></p>
+      <div id="conn-actions" hidden><a class="btn primary" id="conn-home" href="./">Start your own room</a></div>
+    </section>
+
+    <!-- Lobby -->
+    <section id="v-lobby" hidden>
+      <div class="hero glass">
+        <div>
+          <h1 id="lobby-title">Your room is ready</h1>
+          <p class="lede" id="lobby-sub"></p>
+        </div>
+        <div class="share">
+          <input id="room-link" readonly aria-label="Room link">
+          <button class="btn primary" id="btn-copy">Copy room link</button>
+        </div>
+        <p class="hint">Room code <strong id="room-code"></strong></p>
+        <details class="joinbox" id="host-join">
+          <summary>Joining a friend's room instead?</summary>
+          <div class="row"><input id="join-code" placeholder="Room code, like K7QX2" maxlength="24" aria-label="Room code"><button class="btn small" id="join-go">Join</button></div>
+        </details>
+      </div>
+      <div class="cols">
+        <div class="glass panel">
+          <h2>Players <span class="count" id="pcount"></span></h2>
+          <ul id="players" class="plist"></ul>
+          <div class="mic-box">
+            <button class="btn" id="btn-audio">Enable mic and sound</button>
+            <div class="meter" id="mic-meter" hidden><i></i></div>
+            <p class="hint" id="mic-hint"></p>
+          </div>
+        </div>
+        <div class="glass panel">
+          <h2>Sound queue</h2>
+          <p class="hint">Every sound becomes one round, in this order. Only the uploader can hear a sound before its round. Sounds are trimmed to 3 seconds.</p>
+          <label class="drop" id="drop">
+            <input class="sr" type="file" id="file" accept="audio/*,.mp3,.wav,.ogg" multiple>
+            <strong>Add sounds</strong>
+            <span>MP3, WAV or OGG. Drop files here or tap to choose.</span>
+          </label>
+          <ul id="clips" class="clist"></ul>
+        </div>
+      </div>
+      <div class="startbar">
+        <p class="hint" id="start-hint"></p>
+        <button class="btn primary big" id="btn-start">Start game</button>
+      </div>
+    </section>
+
+    <!-- Game -->
+    <section id="v-game" hidden>
+      <div class="game-grid">
+        <div class="glass stage-wrap">
+          <div class="round-chip" id="round-chip"></div>
+          <div class="banner" id="banner" hidden></div>
+          <div class="stage" id="stage" aria-live="polite"></div>
+        </div>
+        <aside>
+          <div class="glass panel">
+            <h2>Leaderboard</h2>
+            <div class="tablewrap"><table id="board"></table></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Final -->
+    <section id="v-final" hidden>
+      <div class="glass final">
+        <h1 id="final-title">Game over</h1>
+        <p class="muted" id="final-sub"></p>
+        <div class="podium" id="podium"></div>
+        <div class="tablewrap"><table id="final-board"></table></div>
+        <button class="btn primary big" id="btn-again">Back to the lobby</button>
+        <p class="hint" id="final-wait">Waiting for the host to reopen the lobby.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+'use strict';
+/* ===================================================================
+   Mimic Party - single-file peer-to-peer audio party game
+   Host = authoritative game state. Clients talk only to the host (star topology).
+   =================================================================== */
+
+/* ---------- Config ---------- */
+const CFG = {
+  SR: 22050,            // internal sample rate for every clip and recording
+  REC_SEC: 3,           // recording window
+  CLIP_SEC: 3,          // target clip length (matches the recording window)
+  MAX_SRC_SEC: 60,      // longest source file we keep locally for trimming
+  MAX_FILE_MB: 25,
+  MAX_PLAYERS: 8,
+  MAX_CLIPS: 12,
+  MAX_CLIPS_PER_PLAYER: 5,
+  CHUNK: 12000,         // bytes per data-channel message (kept under PeerJS's own chunk limit)
+  ROOM_PREFIX: 'mimic-'
+};
+
+// STUN servers requested for the game. Add your own TURN server(s) below for networks
+// where direct connections fail (symmetric NAT, corporate Wi-Fi, some mobile carriers).
+const EXTRA_TURN = [
+  // { urls: 'turn:YOUR_TURN_HOST:443?transport=tcp', username: 'USER', credential: 'PASS' }
+];
+function buildIce() {
+  const base = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
+  ];
+  // If this PeerJS build ships default relay (TURN) servers, keep them as a fallback.
+  let lib = [];
+  try {
+    const u = (window.peerjs && window.peerjs.util) || (window.Peer && window.Peer.util);
+    lib = (u && u.defaultConfig && u.defaultConfig.iceServers) || [];
+  } catch (e) {}
+  const seen = new Set(), out = [];
+  for (const s of [...base, ...lib, ...EXTRA_TURN]) {
+    const k = JSON.stringify(s.urls);
+    if (!seen.has(k)) { seen.add(k); out.push(s); }
+  }
+  return out;
+}
+const peerOpts = () => ({ debug: 1, config: { iceServers: buildIce() } });
+
+/* ---------- Small helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 8);
+const rand = a => a[Math.floor(Math.random() * a.length)];
+const clean = (s, n) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
+const cleanName = s => clean(s, 16);
+const toU8 = d => {
+  if (d instanceof Uint8Array) return d;
+  if (d instanceof ArrayBuffer) return new Uint8Array(d);
+  if (ArrayBuffer.isView(d)) return new Uint8Array(d.buffer, d.byteOffset, d.byteLength);
+  return null;
+};
+
+/* ===================================================================
+   DSP: resampling, mu-law transport codec, pitch detection, scoring
+   =================================================================== */
+// ==== DSP:BEGIN
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+function resample(x, from, to) {
+  if (from === to) return x;
+  const ratio = from / to, n = Math.floor(x.length / ratio), out = new Float32Array(n);
+  if (ratio > 1) { // box filter downsample
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(i * ratio), b = Math.min(x.length, Math.max(a + 1, Math.floor((i + 1) * ratio)));
+      let s = 0; for (let k = a; k < b; k++) s += x[k];
+      out[i] = s / (b - a);
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const p = i * ratio, a = Math.floor(p), f = p - a, v0 = x[a], v1 = x[Math.min(a + 1, x.length - 1)];
+      out[i] = v0 + (v1 - v0) * f;
+    }
+  }
+  return out;
+}
+
+// 8-bit mu-law halves the bytes we push through the data channel.
+const MU = 255;
+function muEnc(f) {
+  const out = new Uint8Array(f.length), d = Math.log1p(MU);
+  for (let i = 0; i < f.length; i++) {
+    const x = Math.max(-1, Math.min(1, f[i]));
+    const y = Math.sign(x) * Math.log1p(MU * Math.abs(x)) / d;
+    out[i] = Math.round((y + 1) * 127.5);
+  }
+  return out;
+}
+function muDec(u) {
+  const out = new Float32Array(u.length);
+  for (let i = 0; i < u.length; i++) {
+    const y = u[i] / 127.5 - 1;
+    out[i] = Math.sign(y) * (Math.pow(1 + MU, Math.abs(y)) - 1) / MU;
+  }
+  return out;
+}
+
+function normalize(x, target = 0.85) {
+  let pk = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > pk) pk = a; }
+  if (pk < 0.03) return x;
+  const g = Math.min(12, target / pk), out = new Float32Array(x.length);
+  for (let i = 0; i < x.length; i++) out[i] = x[i] * g;
+  return out;
+}
+
+/* Fundamental frequency by normalised autocorrelation (NSDF). Returns Hz or NaN. */
+const AN = { WIN: 1024, HOP: 512, seg: null, nsdf: null };
+function pitchAt(x, off, sr) {
+  const W = AN.WIN, minLag = Math.floor(sr / 1100), maxLag = Math.floor(sr / 65);
+  if (!AN.seg) { AN.seg = new Float32Array(W); AN.nsdf = new Float32Array(maxLag + 3); }
+  const seg = AN.seg, nsdf = AN.nsdf;
+  let mean = 0; for (let i = 0; i < W; i++) mean += x[off + i];
+  mean /= W;
+  for (let i = 0; i < W; i++) seg[i] = x[off + i] - mean;
+  for (let t = 1; t <= maxLag + 1; t++) {
+    let acf = 0, m = 0;
+    for (let i = 0; i < W - t; i++) { const a = seg[i], b = seg[i + t]; acf += a * b; m += a * a + b * b; }
+    nsdf[t] = m > 1e-9 ? 2 * acf / m : 0;
+  }
+  let s = 1; while (s < maxLag && nsdf[s] > 0) s++;      // skip the lobe around lag 0
+  const peaks = []; let best = -1, t = s;
+  while (t < maxLag) {
+    while (t < maxLag && nsdf[t] <= 0) t++;
+    let pt = t, pv = -1;
+    while (t < maxLag && nsdf[t] > 0) { if (nsdf[t] > pv) { pv = nsdf[t]; pt = t; } t++; }
+    if (pv > 0 && pt >= minLag && pt > 1 && pt < maxLag) { peaks.push([pt, pv]); if (pv > best) best = pv; }
+  }
+  if (best < 0.5) return NaN;                              // not clearly pitched
+  const pk = peaks.find(p => p[1] >= 0.9 * best);          // smallest lag that is nearly as strong: the fundamental
+  const t0 = pk[0], a = nsdf[t0 - 1], b = nsdf[t0], c = nsdf[t0 + 1], den = a - 2 * b + c;
+  const shift = den !== 0 ? 0.5 * (a - c) / den : 0;
+  return sr / (t0 + clamp(shift, -1, 1));
+}
+
+function smoothPitch(st) { // 5-frame median; isolated blips become unvoiced
+  const n = st.length, out = new Float32Array(n).fill(NaN);
+  for (let i = 0; i < n; i++) {
+    if (st[i] !== st[i]) continue;
+    const w = [];
+    for (let k = -2; k <= 2; k++) { const v = st[i + k]; if (v !== undefined && v === v) w.push(v); }
+    if (w.length < 3) continue;
+    w.sort((a, b) => a - b); out[i] = w[w.length >> 1];
+  }
+  return out;
+}
+
+/* Turns audio into three comparable tracks over its active region:
+   pitch (semitones relative to the clip's own median = key-independent), loudness, brightness. */
+function analyze(x) {
+  const sr = CFG.SR, W = AN.WIN, HOP = AN.HOP;
+  let peak = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > peak) peak = a; }
+  const out = { peak, ok: false, pitch: new Float32Array(0), rms: new Float32Array(0), zcr: new Float32Array(0), voicedRatio: 0 };
+  const nF = Math.floor((x.length - W) / HOP) + 1;
+  if (nF < 4 || peak < 0.004) return out;
+  const g = 0.9 / peak, y = new Float32Array(x.length);
+  for (let i = 0; i < x.length; i++) y[i] = x[i] * g;
+  const rms = new Float32Array(nF), zcr = new Float32Array(nF); let maxR = 0;
+  for (let f = 0; f < nF; f++) {
+    const o = f * HOP; let s = 0, z = 0;
+    for (let i = 0; i < W; i++) { const v = y[o + i]; s += v * v; if (i > 0 && ((v >= 0) !== (y[o + i - 1] >= 0))) z++; }
+    rms[f] = Math.sqrt(s / W); zcr[f] = z / W; if (rms[f] > maxR) maxR = rms[f];
+  }
+  const gate = Math.max(0.03, maxR * 0.14);
+  let first = -1, last = -1;
+  for (let f = 0; f < nF; f++) if (rms[f] >= gate) { if (first < 0) first = f; last = f; }
+  if (first < 0) return out;
+  const n = last - first + 1, st = new Float32Array(n).fill(NaN);
+  for (let k = 0; k < n; k++) {
+    const f = first + k; if (rms[f] < gate) continue;
+    const hz = pitchAt(y, f * HOP, sr); if (hz === hz) st[k] = 12 * Math.log2(hz / 55);
+  }
+  const sm = smoothPitch(st), v = [];
+  for (let k = 0; k < n; k++) if (sm[k] === sm[k]) v.push(sm[k]);
+  if (v.length) { v.sort((a, b) => a - b); const med = v[v.length >> 1]; for (let k = 0; k < n; k++) if (sm[k] === sm[k]) sm[k] -= med; }
+  const r2 = new Float32Array(n), z2 = new Float32Array(n); let mr = 0;
+  for (let k = 0; k < n; k++) { r2[k] = rms[first + k]; z2[k] = zcr[first + k]; if (r2[k] > mr) mr = r2[k]; }
+  for (let k = 0; k < n; k++) r2[k] /= (mr || 1);
+  out.ok = true; out.pitch = sm; out.rms = r2; out.zcr = z2; out.voicedRatio = v.length / n;
+  return out;
+}
+
+/* Dynamic time warping so a late or slow start is not punished. Returns avg cost per step. */
+function dtw(a, b, cost, band, pen) {
+  pen = pen || 0;
+  const n = a.length, m = b.length; if (!n || !m) return null;
+  const INF = 1e9; let prev = new Float64Array(m + 1).fill(INF), cur = new Float64Array(m + 1);
+  prev[0] = 0;
+  for (let i = 1; i <= n; i++) {
+    cur.fill(INF);
+    const c = i * m / n, lo = Math.max(1, Math.floor(c - band)), hi = Math.min(m, Math.ceil(c + band));
+    for (let j = lo; j <= hi; j++) {
+      const d = cost(a[i - 1], b[j - 1]);
+      cur[j] = Math.min(prev[j] + d + pen, cur[j - 1] + d + pen, prev[j - 1] + 2 * d);
+    }
+    const t = prev; prev = cur; cur = t;
+  }
+  const r = prev[m];
+  return r >= INF / 2 ? null : r / (n + m);
+}
+
+function scorePlayer(t, p) {
+  if (!p.ok || p.peak < 0.02) return { score: 0, pitch: 0, rhythm: 0, tone: 0, silent: true };
+  const band = Math.max(8, Math.round(Math.max(t.pitch.length, p.pitch.length) * 0.35));
+  // pitch cost in semitones: both voiced = interval error, one voiced = 7, both unvoiced = 0
+  const pc = (a, b) => { const na = a !== a, nb = b !== b; if (na && nb) return 0; if (na || nb) return 7; return Math.min(Math.abs(a - b), 12); };
+  const pAvg = dtw(t.pitch, p.pitch, pc, band, 1.0);
+  const pitchSim = pAvg == null ? 0 : Math.exp(-pAvg / 2.2);
+  const eAvg = dtw(t.rms, p.rms, (a, b) => Math.abs(a - b), band, 0.5);
+  const rhythm = eAvg == null ? 0 : Math.max(0, 1 - eAvg / 0.45);
+  const zAvg = dtw(t.zcr, p.zcr, (a, b) => Math.min(1, Math.abs(a - b) * 4), band, 0.4);
+  const tone = zAvg == null ? 0 : Math.max(0, 1 - zAvg);
+  const pw = 0.8 * clamp((t.voicedRatio - 0.15) / 0.35, 0, 1), zw = 0.8 - pw;   // pitched target: pitch dominates; noisy target: tone
+  let x = pw * pitchSim + 0.2 * rhythm + zw * tone;
+  const ratio = Math.min(t.pitch.length, p.pitch.length) / Math.max(t.pitch.length, p.pitch.length);
+  x *= 0.75 + 0.25 * Math.pow(ratio, 0.7);                                      // gentle penalty for a very different length
+  return { score: Math.round(100 * Math.pow(clamp(x, 0, 1), 0.85)), pitch: Math.round(pitchSim * 100), rhythm: Math.round(rhythm * 100), tone: Math.round(tone * 100), silent: false };
+}
+
+const FEEDBACK = [
+  [0, 0, ['Silence. Bold strategy.', 'Is your microphone on vacation?', 'Nothing. Absolutely nothing. Iconic.']],
+  [1, 24, ['Did a raccoon hijack your microphone?', 'The original sound is filing a complaint.', 'That was a noise. Technically.']],
+  [25, 44, ['Same zip code as the sound. Barely.', 'Your dog looked up. Not in a good way.', 'Bold interpretation. Wrong, but bold.']],
+  [45, 64, ['Respectable chaos. The vibe was there.', 'Halfway to legendary, halfway to a cry for help.', 'The neighbors heard that. They have opinions.']],
+  [65, 79, ['Now we are cooking. Loudly.', 'Suspiciously close. Been practicing?', 'That was actually good. Unsettling.']],
+  [80, 94, ['Are you the original sound? Be honest.', 'Elite mimicry. Sound engineers are nervous.', 'Parrots are calling. They want their job back.']],
+  [95, 100, ['Flawless. You are legally a parrot now.', 'Perfection. The sound wants your autograph.', 'Impossible. Rerun the test, then frame it.']]
+];
+function feedback(score, silent) {
+  const tier = silent ? FEEDBACK[0] : FEEDBACK.find(f => score >= f[0] && score <= f[1] && f[0] > 0) || FEEDBACK[1];
+  return tier[2][Math.floor(Math.random() * tier[2].length)];
+}
+
+function sampleSeries(arr, n) { // time-normalised, JSON-safe series for drawing
+  const out = [];
+  if (!arr || !arr.length) { for (let i = 0; i < n; i++) out.push(null); return out; }
+  for (let i = 0; i < n; i++) {
+    const v = arr[Math.round(i * (arr.length - 1) / (n - 1))];
+    out.push(v === v ? Math.round(v * 100) / 100 : null);
+  }
+  return out;
+}
+// ==== DSP:END
+
+/* ===================================================================
+   Sabotage effects (Web Audio nodes, rendered offline on the victim's recording)
+   =================================================================== */
+const FX = [
+  { id: 'echo',   name: 'Echo Chamber',  emoji: '🌀', color: '#5b8cff' },
+  { id: 'helium', name: 'Helium Squeak', emoji: '🎈', color: '#ff5c93' },
+  { id: 'choppy', name: 'Choppy Mute',   emoji: '✂️', color: '#ffc857' },
+  { id: 'robot',  name: 'Robot Crush',   emoji: '🤖', color: '#5ef0c0' }
+];
+const FXMAP = Object.fromEntries(FX.map(f => [f.id, f]));
+
+async function applyEffect(x, fx) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const sr = CFG.SR, dur = x.length / sr;
+  const rate = fx === 'helium' ? 1.7 : 1, tail = fx === 'echo' ? 2.0 : 0;
+  const len = Math.max(Math.floor(sr * 0.2), Math.ceil((dur / rate + tail) * sr));
+  const oc = new OAC(1, len, sr);
+  const buf = oc.createBuffer(1, x.length, sr); buf.copyToChannel(x, 0);
+  const src = oc.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
+  let last = src;
+  const chain = (...nodes) => { for (const n of nodes) { last.connect(n); last = n; } };
+
+  if (fx === 'echo') {                          // DelayNode feedback loop + darker repeats
+    const dry = oc.createGain(); dry.gain.value = 1;
+    const dl = oc.createDelay(1); dl.delayTime.value = 0.28;
+    const fb = oc.createGain(); fb.gain.value = 0.6;
+    const tone = oc.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2800;
+    const wet = oc.createGain(); wet.gain.value = 0.9;
+    src.connect(dry); dry.connect(oc.destination);
+    src.connect(dl); dl.connect(tone); tone.connect(fb); fb.connect(dl); tone.connect(wet); wet.connect(oc.destination);
+  } else if (fx === 'helium') {                 // faster playback raises pitch; filters thin out the voice
+    const hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 380;
+    const sh = oc.createBiquadFilter(); sh.type = 'highshelf'; sh.frequency.value = 2800; sh.gain.value = 6;
+    const g = oc.createGain(); g.gain.value = 1.1;
+    chain(hp, sh, g); g.connect(oc.destination);
+  } else if (fx === 'choppy') {                 // GainNode gate opening and closing at random
+    const gate = oc.createGain(); gate.gain.value = 1;
+    let t = 0, open = Math.random() < 0.5;
+    while (t < len / sr) {
+      gate.gain.setTargetAtTime(open ? 1 : 0, t, 0.004);
+      t += open ? 0.07 + Math.random() * 0.12 : 0.08 + Math.random() * 0.16;
+      open = !open;
+    }
+    chain(gate); gate.connect(oc.destination);
+  } else if (fx === 'robot') {                  // quantiser + ring modulator + radio band-pass
+    const drive = oc.createGain(); drive.gain.value = 2.2;
+    const ws = oc.createWaveShaper(), levels = 6, curve = new Float32Array(2048);
+    for (let i = 0; i < 2048; i++) { const v = i / 1023.5 - 1; curve[i] = Math.round(v * levels) / levels; }
+    ws.curve = curve;
+    const ring = oc.createGain(); ring.gain.value = 0;
+    const osc = oc.createOscillator(); osc.type = 'sine'; osc.frequency.value = 60; osc.connect(ring.gain); osc.start(0);
+    const bp = oc.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.7;
+    const mk = oc.createGain(); mk.gain.value = 1.6;
+    chain(drive, ws, ring, bp, mk); mk.connect(oc.destination);
+  } else {
+    src.connect(oc.destination);
+  }
+  src.start(0);
+  const rendered = await oc.startRendering();
+  const y = new Float32Array(rendered.getChannelData(0));
+  if (fx === 'robot') { for (let i = 0; i < y.length; i++) { const k = i - (i % 3); if (i !== k) y[i] = y[k]; } } // sample-rate reduction
+  return y;
+}
+
+/* ===================================================================
+   Audio engine: context, mic capture (raw PCM), playback, file decoding
+   =================================================================== */
+const AE = { ctx: null, out: null, outAn: null, micStream: null, micSrc: null, micAn: null, recNode: null, recKind: '',
+  micOk: false, micErr: '', cur: null, volume: 0.9, spOn: false, spCb: null, busy: false };
+try { const v = parseFloat(localStorage.getItem('mimic-vol')); if (v >= 0 && v <= 1) AE.volume = v; } catch (e) {}
+
+function ensureCtx() {
+  if (!AE.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    AE.ctx = new AC({ latencyHint: 'interactive' });
+    AE.out = AE.ctx.createGain(); AE.out.gain.value = AE.volume;
+    AE.outAn = AE.ctx.createAnalyser(); AE.outAn.fftSize = 512;
+    AE.out.connect(AE.outAn); AE.outAn.connect(AE.ctx.destination);
+    AE.ctx.onstatechange = () => { renderAll(); };
+  }
+  if (AE.ctx.state === 'suspended') AE.ctx.resume().catch(() => {});
+  return AE.ctx;
+}
+function setVolume(v) { AE.volume = v; if (AE.out) AE.out.gain.value = v; try { localStorage.setItem('mimic-vol', String(v)); } catch (e) {} }
+
+function micError(e) {
+  if (!window.isSecureContext) return 'Microphones only work on HTTPS pages (GitHub Pages is fine).';
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'Microphone access is blocked. Allow it in your browser\'s site settings, then try again.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No microphone was found on this device.';
+  return 'The microphone could not start: ' + ((e && e.message) || 'unknown error');
+}
+
+async function buildRecorder() {
+  const ctx = AE.ctx;
+  AE.micSrc = ctx.createMediaStreamSource(AE.micStream);
+  AE.micAn = ctx.createAnalyser(); AE.micAn.fftSize = 512; AE.micSrc.connect(AE.micAn);
+  const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination); // keeps the graph pulled without feedback
+  if (ctx.audioWorklet && window.AudioWorkletNode) {
+    try {
+      const code = "class R extends AudioWorkletProcessor{constructor(){super();this.on=false;this.port.onmessage=e=>{this.on=!!e.data;};}process(i){const c=i[0]&&i[0][0];if(this.on&&c){const o=new Float32Array(c);this.port.postMessage(o,[o.buffer]);}return true;}}registerProcessor('mimic-rec',R);";
+      const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+      await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+      const node = new AudioWorkletNode(ctx, 'mimic-rec', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+      AE.micSrc.connect(node); node.connect(sink);
+      AE.recNode = node; AE.recKind = 'worklet'; return;
+    } catch (e) { console.warn('AudioWorklet unavailable, using ScriptProcessor', e); }
+  }
+  const sp = ctx.createScriptProcessor(2048, 1, 1);
+  AE.micSrc.connect(sp); sp.connect(sink);
+  sp.onaudioprocess = e => { if (AE.spOn && AE.spCb) AE.spCb(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  AE.recNode = sp; AE.recKind = 'script';
+}
+
+async function enableAudio() {
+  if (AE.busy) return; AE.busy = true;
+  try {
+    const ctx = ensureCtx();
+    try { await ctx.resume(); } catch (e) {}
+    try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {} // iOS unlock
+    if (!AE.micStream) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { AE.micOk = false; AE.micErr = micError(null); }
+      else {
+        try {
+          AE.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+          await buildRecorder(); AE.micOk = true; AE.micErr = '';
+        } catch (e) { AE.micStream = null; AE.micOk = false; AE.micErr = micError(e); }
+      }
+    }
+  } finally { AE.busy = false; }
+  announceStatus(); renderAll();
+}
+
+/* Captures exactly `sec` seconds of mic audio as Float32 at the context's sample rate. */
+function recordPCM(sec) {
+  return new Promise((resolve, reject) => {
+    if (!AE.recNode) { reject(new Error('no recorder')); return; }
+    const need = Math.floor(sec * AE.ctx.sampleRate), chunks = []; let n = 0, done = false;
+    const stop = () => {
+      if (AE.recKind === 'worklet') { AE.recNode.port.postMessage(false); AE.recNode.port.onmessage = null; }
+      else { AE.spOn = false; AE.spCb = null; }
+    };
+    const finish = () => {
+      if (done) return; done = true; stop();
+      const out = new Float32Array(Math.min(n, need)); let o = 0;
+      for (const c of chunks) { if (o >= out.length) break; const take = Math.min(c.length, out.length - o); out.set(c.subarray(0, take), o); o += take; }
+      resolve(out);
+    };
+    const onBlock = d => { chunks.push(d); n += d.length; if (n >= need) finish(); };
+    if (AE.recKind === 'worklet') { AE.recNode.port.onmessage = e => onBlock(e.data); AE.recNode.port.postMessage(true); }
+    else { AE.spCb = onBlock; AE.spOn = true; }
+    setTimeout(finish, sec * 1000 + 1500);
+  });
+}
+
+function playF32(f, onEnd) {
+  if (!f || !f.length) return null;
+  const ctx = ensureCtx();
+  const buf = ctx.createBuffer(1, f.length, CFG.SR); buf.copyToChannel(f, 0);
+  const src = ctx.createBufferSource(); src.buffer = buf; src.connect(AE.out);
+  stopPlayback(); AE.cur = src;
+  src.onended = () => { if (AE.cur === src) AE.cur = null; if (onEnd) onEnd(); };
+  src.start(); return src;
+}
+function stopPlayback() { const s = AE.cur; AE.cur = null; if (s) { try { s.stop(); } catch (e) {} } }
+
+async function decodeFile(file) {
+  const ctx = ensureCtx(), ab = await file.arrayBuffer();
+  const buf = await new Promise((res, rej) => { const p = ctx.decodeAudioData(ab, res, rej); if (p && p.catch) p.catch(rej); });
+  const len = Math.min(buf.length, Math.floor(buf.sampleRate * CFG.MAX_SRC_SEC)), mono = new Float32Array(len), chs = buf.numberOfChannels;
+  for (let c = 0; c < chs; c++) { const d = buf.getChannelData(c); for (let i = 0; i < len; i++) mono[i] += d[i] / chs; }
+  const x = resample(mono, buf.sampleRate, CFG.SR);
+  let pk = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > pk) pk = a; }
+  if (pk < 1e-4) throw new Error('silent');
+  const g = 0.9 / pk; for (let i = 0; i < x.length; i++) x[i] *= g;
+  return x;
+}
+function sliceWindow(full, start) {
+  const a = Math.floor(start * CFG.SR), n = Math.max(0, Math.min(full.length - a, Math.floor(CFG.CLIP_SEC * CFG.SR)));
+  const out = new Float32Array(n); out.set(full.subarray(a, a + n));
+  const fade = Math.min(110, n >> 1);
+  for (let i = 0; i < fade; i++) { const g = i / fade; out[i] *= g; out[n - 1 - i] *= g; }
+  return out;
+}
+
+/* ===================================================================
+   State
+   =================================================================== */
+const COLORS = ['#ff5c93', '#5b8cff', '#ffc857', '#5ef0c0', '#b58cff', '#ff8a4c', '#4fd6ff', '#b6e64c'];
+const newState = () => ({ phase: 'lobby', hostId: null, players: [], clips: [], round: 0, totalRounds: 0, roundClip: null,
+  pending: [], spin: null, results: null, nowPlaying: null, revealed: [] });
+let S = newState();
+const me = { id: null, isHost: false, name: '' };
+const UI = { screen: null, fatal: null, connMsg: 'Setting up your room…', roomLink: '', stageKey: '', shownPid: null, infoKey: '', pick: null,
+  wheelAngle: 0, recStart: 0, iv: null, joined: false };
+const LOCAL = { target: null, audio: {}, myClips: new Map() };  // per-device data (never in S)
+const H = { conns: new Map(), clips: new Map(), order: [], recs: new Map(), ready: new Set(), targetAn: null, run: 0, timers: [] }; // host-only
+let peer = null, hostConn = null;
+
+const player = id => S.players.find(p => p.id === id);
+const myPlayer = () => player(me.id);
+const nameOf = id => { const p = player(id); return p ? p.name : 'Someone'; };
+const ini = p => esc((p.name.trim().charAt(0) || '?').toUpperCase());
+
+const ADJ = ['Wobbly', 'Sneaky', 'Cosmic', 'Sleepy', 'Turbo', 'Fuzzy', 'Grumpy', 'Jazzy', 'Spicy', 'Mellow'];
+const ANI = ['Otter', 'Parrot', 'Walrus', 'Gecko', 'Llama', 'Moth', 'Yak', 'Heron', 'Newt', 'Lynx'];
+try { me.name = cleanName(localStorage.getItem('mimic-name')); } catch (e) {}
+if (!me.name) me.name = rand(ADJ) + ' ' + rand(ANI);
+
+function addPlayer(id, name, isHost) {
+  const used = new Set(S.players.map(p => p.color));
+  S.players.push({ id, name: cleanName(name) || 'Player', color: COLORS.find(c => !used.has(c)) || rand(COLORS), isHost: !!isHost,
+    mic: false, sound: false, connected: true, scores: [], total: 0, spins: 0 });
+}
+
+/* ===================================================================
+   Networking: chunked binary over PeerJS data channels
+   =================================================================== */
+const inbox = new Map();
+async function drain(conn) {
+  for (let n = 0; conn.open && n < 300; n++) {
+    const dc = conn.dataChannel;
+    if (!dc || (dc.bufferedAmount || 0) < 256 * 1024) return;
+    await sleep(20);
+  }
+}
+async function sendBin(conn, msg, bytes) {
+  if (!conn || !conn.open) return;
+  const id = uid(), total = bytes.length, n = Math.max(1, Math.ceil(total / CFG.CHUNK));
+  conn.send({ t: 'bin-start', id, size: total, msg });
+  for (let i = 0; i < n; i++) {
+    if (!conn.open) return;
+    await drain(conn);
+    conn.send({ t: 'bin', id, i, d: bytes.slice(i * CFG.CHUNK, (i + 1) * CFG.CHUNK) });
+  }
+}
+function handleRaw(from, d, dispatch) {
+  if (!d || typeof d !== 'object') return;
+  if (d.t === 'bin-start') {
+    if (!(d.size >= 0) || d.size > 400000 || !d.msg) return;
+    const r = { msg: d.msg, size: d.size, got: 0, buf: new Uint8Array(d.size) };
+    if (d.size === 0) { r.msg.bytes = r.buf; dispatch(r.msg); return; }
+    inbox.set(from + d.id, r);
+  } else if (d.t === 'bin') {
+    const r = inbox.get(from + d.id), u = toU8(d.d); if (!r || !u) return;
+    if (d.i * CFG.CHUNK + u.length > r.size) return;
+    r.buf.set(u, d.i * CFG.CHUNK); r.got += u.length;
+    if (r.got >= r.size) { inbox.delete(from + d.id); r.msg.bytes = r.buf; dispatch(r.msg); }
+  } else dispatch(d);
+}
+const activeConns = () => [...H.conns.values()].filter(c => c.open);
+const broadcast = msg => { for (const c of activeConns()) c.send(msg); };
+const connectedIds = () => S.players.filter(p => p.connected).map(p => p.id);
+function toHost(m) { if (me.isHost) hostHandle({ peer: me.id }, m); else if (hostConn && hostConn.open) hostConn.send(m); }
+function notify(id, text) { if (id === me.id) toast(text); else { const c = H.conns.get(id); if (c && c.open) c.send({ t: 'toast', text }); } }
+
+function pushState() {
+  if (me.isHost) {
+    const snap = JSON.parse(JSON.stringify(S));
+    for (const c of activeConns()) c.send({ t: 'state', s: snap });
+  }
+  renderAll();
+}
+
+/* ---------- Host: connections ---------- */
+const makeCode = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += a[Math.floor(Math.random() * a.length)]; return s; };
+const roomLink = id => location.origin + location.pathname + '?room=' + encodeURIComponent(id);
+
+function startHost() {
+  me.isHost = true; UI.connMsg = 'Setting up your room…'; renderAll();
+  if (typeof Peer === 'undefined') { fatal('PeerJS could not load. Check your connection and reload the page.'); return; }
+  const tryOpen = attempt => {
+    const pr = new Peer(CFG.ROOM_PREFIX + makeCode(), peerOpts());
+    pr.on('open', id => {
+      peer = pr; me.id = id; S.hostId = id; addPlayer(id, me.name, true);
+      UI.roomLink = roomLink(id); UI.connMsg = null; renderAll();
+    });
+    pr.on('connection', hostAccept);
+    pr.on('disconnected', () => { try { pr.reconnect(); } catch (e) {} });
+    pr.on('error', err => {
+      if (err.type === 'unavailable-id' && attempt < 5) { pr.destroy(); tryOpen(attempt + 1); }
+      else if (['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'].includes(err.type)) toast('The matchmaking server hiccuped. Reconnecting…');
+      else if (!S.hostId) fatal('Could not create a room (' + err.type + '). Reload to try again.');
+    });
+  };
+  tryOpen(0);
+}
+
+function hostAccept(conn) {
+  conn.on('open', () => {
+    const deny = reason => { conn.send({ t: 'denied', reason }); setTimeout(() => conn.close(), 600); };
+    if (S.phase !== 'lobby') return deny('A game is already in progress. Ask the host to start a new one.');
+    if (S.players.length >= CFG.MAX_PLAYERS) return deny('This room is full (' + CFG.MAX_PLAYERS + ' players).');
+    H.conns.set(conn.peer, conn);
+  });
+  conn.on('data', d => handleRaw(conn.peer, d, m => hostHandle(conn, m)));
+  conn.on('close', () => hostDrop(conn.peer));
+  conn.on('error', () => hostDrop(conn.peer));
+}
+function hostDrop(id) {
+  if (!H.conns.has(id)) return;
+  H.conns.delete(id);
+  const p = player(id); if (!p) return;
+  if (S.phase === 'lobby') S.players = S.players.filter(x => x.id !== id); else p.connected = false;
+  toast(p.name + ' left'); pushState();
+}
+
+function hostHandle(conn, m) {
+  const id = conn.peer;
+  if (!m || typeof m !== 'object') return;
+  switch (m.t) {
+    case 'hello':
+      if (!H.conns.has(id) || player(id) || S.phase !== 'lobby') return;
+      addPlayer(id, m.name, false); pushState(); toast(nameOf(id) + ' joined'); break;
+    case 'rename': { const p = player(id); if (p) { p.name = cleanName(m.name) || p.name; pushState(); } break; }
+    case 'status': { const p = player(id); if (p) { p.mic = !!m.mic; p.sound = !!m.sound; pushState(); } break; }
+    case 'clip': if (m.bytes && m.meta) hostAddClip(id, m.meta, muDec(m.bytes)); break;
+    case 'clip-remove': hostRemoveClip(id, m.id); break;
+    case 'ready': if (m.round === S.round) H.ready.add(id); break;
+    case 'rec': if (m.round === S.round && S.phase === 'record') H.recs.set(id, m.bytes && !m.none ? muDec(m.bytes) : null); break;
+    case 'spin': hostSpin(id); break;
+    case 'sabotage': hostSabotage(id, m.victim); break;
+  }
+}
+
+function hostAddClip(owner, meta, f32) {
+  if (S.phase !== 'lobby') return;
+  const id = clean(meta.id, 16); if (!id) return;
+  const ix = S.clips.findIndex(c => c.id === id);
+  if (ix < 0) {
+    if (S.clips.length >= CFG.MAX_CLIPS) return notify(owner, 'The queue is full (' + CFG.MAX_CLIPS + ' sounds).');
+    if (S.clips.filter(c => c.owner === owner).length >= CFG.MAX_CLIPS_PER_PLAYER) return notify(owner, 'You can add up to ' + CFG.MAX_CLIPS_PER_PLAYER + ' sounds.');
+  } else if (S.clips[ix].owner !== owner) return;
+  if (!f32 || f32.length < CFG.SR * 0.2) return;
+  const max = Math.floor(CFG.SR * CFG.CLIP_SEC);
+  if (f32.length > max) f32 = f32.subarray(0, max);
+  H.clips.set(id, { pcm: f32 });
+  const entry = { id, name: clean(meta.name, 40) || 'Sound', owner, ownerName: nameOf(owner), dur: f32.length / CFG.SR };
+  if (ix >= 0) S.clips[ix] = entry; else S.clips.push(entry);
+  pushState();
+}
+function hostRemoveClip(from, id) {
+  if (S.phase !== 'lobby') return;
+  const c = S.clips.find(x => x.id === id); if (!c) return;
+  if (c.owner !== from && from !== S.hostId) return;
+  S.clips = S.clips.filter(x => x.id !== id); H.clips.delete(id); pushState();
+}
+
+/* ---------- Client ---------- */
+function startClient(roomId) {
+  me.isHost = false; UI.connMsg = 'Joining the room…'; renderAll();
+  if (typeof Peer === 'undefined') { fatal('PeerJS could not load. Check your connection and reload the page.'); return; }
+  peer = new Peer(undefined, peerOpts());
+  const timeout = setTimeout(() => { if (!UI.joined) fatal('Could not reach the host. Check the link, or the network may be blocking direct connections (a TURN server fixes that).'); }, 20000);
+  peer.on('open', id => {
+    me.id = id;
+    hostConn = peer.connect(roomId, { reliable: true });
+    hostConn.on('open', () => { UI.joined = true; clearTimeout(timeout); hostConn.send({ t: 'hello', name: me.name }); });
+    hostConn.on('data', d => handleRaw('host', d, clientHandle));
+    hostConn.on('close', () => { if (!UI.fatal) fatal('The host closed the room.'); });
+    hostConn.on('error', e => fatal('Connection error: ' + ((e && e.type) || e)));
+  });
+  peer.on('error', err => {
+    if (err.type === 'peer-unavailable') fatal('That room does not exist anymore. Ask the host for a fresh link.');
+    else if (!UI.joined) fatal('Could not connect (' + err.type + ').');
+  });
+  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+}
+
+function clientHandle(m) {
+  switch (m.t) {
+    case 'state': applyState(m.s); break;
+    case 'denied': fatal(m.reason); break;
+    case 'toast': toast(m.text); break;
+    case 'round': LOCAL.target = muDec(m.bytes); LOCAL.audio = {}; if (hostConn && hostConn.open) hostConn.send({ t: 'ready', round: m.round }); break;
+    case 'go': playTarget(); break;
+    case 'record': doRecord(m.round); break;
+    case 'audio': LOCAL.audio[m.pid] = muDec(m.bytes); break;
+    case 'play': playAudioOf(m.pid); break;
+    case 'spin-start': animateWheel(m.effect); break;
+  }
+}
+function applyState(s) {
+  const prevPhase = S.phase, prevRound = S.round;
+  S = s; UI.connMsg = null;
+  if (S.phase !== prevPhase && (S.phase === 'lobby' || S.phase === 'final')) stopPlayback();
+  if (S.round !== prevRound || S.phase === 'loading') UI.pick = null;
+  renderAll();
+}
+function announceStatus() {
+  const st = { mic: !!AE.micOk, sound: !!(AE.ctx && AE.ctx.state === 'running') };
+  if (me.isHost) { const p = myPlayer(); if (p) { p.mic = st.mic; p.sound = st.sound; pushState(); } }
+  else if (hostConn && hostConn.open) hostConn.send({ t: 'status', ...st });
+}
+function fatal(msg) { UI.fatal = msg; renderAll(); }
+
+/* ===================================================================
+   Round flow (runs on the host)
+   =================================================================== */
+async function waitFor(cond, ms, alive) {
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) { if (alive && !alive()) return false; if (cond()) return true; await sleep(100); }
+  return cond();
+}
+
+function hostStart() {
+  if (S.phase !== 'lobby' || !S.clips.length) return;
+  H.order = S.clips.map(c => c.id);
+  S.totalRounds = H.order.length; S.round = 0; S.pending = [];
+  for (const p of S.players) { p.scores = []; p.total = 0; p.spins = 0; }
+  hostPlayRound();
+}
+
+async function hostPlayRound() {
+  const run = ++H.run, alive = () => H.run === run;
+  try {
+    S.round++; S.results = null; S.nowPlaying = null; S.revealed = []; S.spin = null; UI.pick = null;
+    H.recs.clear(); H.ready.clear(); LOCAL.audio = {};
+    const clipId = H.order[S.round - 1], clip = H.clips.get(clipId), meta = S.clips.find(c => c.id === clipId);
+    S.roundClip = { ownerName: meta ? meta.ownerName : 'someone', dur: clip.pcm.length / CFG.SR };
+    S.phase = 'loading'; pushState(); await sleep(60);
+    LOCAL.target = clip.pcm; H.targetAn = analyze(clip.pcm);
+    const bytes = muEnc(clip.pcm);
+    await Promise.all(activeConns().map(c => sendBin(c, { t: 'round', round: S.round }, bytes)));
+    if (!alive()) return;
+    H.ready.add(me.id);
+    await waitFor(() => connectedIds().every(id => H.ready.has(id)), 9000, alive);
+    if (!alive()) return;
+
+    S.phase = 'listen'; pushState(); broadcast({ t: 'go' }); playTarget();
+    await sleep(S.roundClip.dur * 1000 + 900); if (!alive()) return;
+
+    S.phase = 'countdown'; pushState(); await sleep(3300); if (!alive()) return;
+
+    S.phase = 'record'; pushState(); broadcast({ t: 'record', round: S.round }); doRecord(S.round);
+    await sleep(CFG.REC_SEC * 1000 + 400);
+    await waitFor(() => connectedIds().every(id => H.recs.has(id)), 9000, alive); if (!alive()) return;
+
+    S.phase = 'processing'; pushState(); await sleep(60);
+    await hostJudge(alive); if (!alive()) return;
+    await hostPlayback(alive);
+  } catch (e) {
+    console.error(e);
+    if (H.run === run) { toast('Something broke mid-round. Back to the lobby.'); hostToLobby(); }
+  }
+}
+
+async function hostJudge(alive) {
+  const tA = H.targetAn, kind = tA.voicedRatio >= 0.3 ? 'pitch' : 'energy';
+  const sab = {}; for (const s of S.pending) (sab[s.victim] = sab[s.victim] || []).push(s);
+  const entries = [], audioOut = {};
+  for (const p of S.players) {
+    const raw = H.recs.get(p.id), fx = sab[p.id] || [];
+    let audio = null;
+    if (raw && raw.length > CFG.SR * 0.3) {
+      audio = raw;
+      for (const s of fx) { try { audio = await applyEffect(audio, s.effect); } catch (e) { console.warn('effect failed', e); } }
+      audio = normalize(audio);
+    }
+    const e = { id: p.id, score: 0, pitch: 0, rhythm: 0, tone: 0, silent: false, nomic: false, winner: false,
+      fx: fx.map(s => ({ effect: s.effect, by: s.by })), hasAudio: !!audio, dur: audio ? audio.length / CFG.SR : 0, contour: null, fb: '' };
+    if (!audio) { e.nomic = true; e.fb = p.connected ? 'No mic, no score. Turn it on next round.' : 'Left the building.'; }
+    else {
+      const a = analyze(audio), r = scorePlayer(tA, a);
+      Object.assign(e, { score: r.score, pitch: r.pitch, rhythm: r.rhythm, tone: r.tone, silent: r.silent });
+      e.fb = feedback(r.score, r.silent);
+      e.contour = sampleSeries(kind === 'pitch' ? a.pitch : a.rms, 64);
+      audioOut[p.id] = audio;
+    }
+    entries.push(e); await sleep(0); if (!alive()) return;
+  }
+  const max = Math.max(0, ...entries.map(e => e.score)), idx = S.round - 1;
+  for (const e of entries) {
+    const p = player(e.id);
+    p.scores[idx] = e.score; p.total = p.scores.reduce((a, b) => a + (b || 0), 0);
+    e.winner = max > 0 && e.score === max;
+    if ((e.winner || e.score >= 80) && p.connected) p.spins = Math.min(2, p.spins + 1);   // winners and 80+ sharpshooters earn a spin
+  }
+  S.results = { round: S.round, kind, target: sampleSeries(kind === 'pitch' ? tA.pitch : tA.rms, 64), entries };
+  S.pending = [];
+  for (const [pid, f] of Object.entries(audioOut)) {
+    const enc = muEnc(f); LOCAL.audio[pid] = muDec(enc);
+    await Promise.all(activeConns().map(c => sendBin(c, { t: 'audio', pid, round: S.round }, enc)));
+    if (!alive()) return;
+  }
+}
+
+async function hostPlayback(alive) {
+  S.phase = 'playback'; S.nowPlaying = null; S.revealed = []; pushState(); await sleep(900);
+  const order = [...S.results.entries].sort((a, b) => a.score - b.score);   // winner last
+  for (const e of order) {
+    if (!alive()) return;
+    S.nowPlaying = e.id; pushState();
+    if (e.hasAudio) { broadcast({ t: 'play', pid: e.id }); playAudioOf(e.id); }
+    await sleep((e.dur || 0.6) * 1000 + 500);
+    S.revealed = [...S.revealed, e.id]; pushState();
+    await sleep(2200);
+  }
+  if (!alive()) return;
+  S.nowPlaying = null; S.phase = 'results'; pushState();
+}
+
+function hostNext() {
+  if (S.phase !== 'results' || S.spin) return;
+  if (S.round >= S.totalRounds) { S.phase = 'final'; pushState(); } else hostPlayRound();
+}
+function hostToLobby() {
+  H.run++; stopPlayback(); H.timers.forEach(clearTimeout); H.timers = [];
+  S.phase = 'lobby'; S.round = 0; S.totalRounds = 0; S.results = null; S.nowPlaying = null; S.revealed = []; S.pending = []; S.spin = null; S.roundClip = null;
+  S.players = S.players.filter(p => p.connected);
+  for (const p of S.players) { p.scores = []; p.total = 0; p.spins = 0; }
+  pushState();
+}
+
+/* ---------- Sabotage wheel ---------- */
+function hostSpin(id) {
+  const p = player(id);
+  if (S.phase !== 'results' || S.spin || !p || p.spins < 1) return;
+  if (!S.players.some(x => x.id !== id && x.connected)) return;
+  p.spins--;
+  const effect = rand(FX).id, sid = uid();
+  S.spin = { id: sid, by: id, effect, stage: 'spinning' };
+  pushState(); broadcast({ t: 'spin-start', effect }); animateWheel(effect);
+  H.timers.push(setTimeout(() => { if (S.spin && S.spin.id === sid) { S.spin.stage = 'pick'; pushState(); } }, 4700));
+  H.timers.push(setTimeout(() => {   // auto-pick if the spinner dawdles or leaves
+    if (S.spin && S.spin.id === sid) { const riv = S.players.filter(x => x.id !== id && x.connected); if (riv.length) hostSabotage(id, rand(riv).id); }
+  }, 4700 + 20000));
+}
+function hostSabotage(from, victim) {
+  const sp = S.spin;
+  if (!sp || sp.by !== from || sp.stage !== 'pick') return;
+  const v = player(victim); if (!v || !v.connected || victim === from) return;
+  S.pending.push({ id: sp.id, victim, by: from, effect: sp.effect }); S.spin = null;
+  const f = FXMAP[sp.effect], text = nameOf(from) + ' hit ' + v.name + ' with ' + f.name + ' ' + f.emoji;
+  broadcast({ t: 'toast', text }); toast(text); pushState();
+}
+function animateWheel(effectId) {
+  const w = $('#wheel'); if (!w) return;
+  const k = FX.findIndex(f => f.id === effectId), c = k * 90 + 45, j = (Math.random() - .5) * 50;
+  const target = (((360 - c + j) % 360) + 360) % 360, cur = ((UI.wheelAngle % 360) + 360) % 360;
+  UI.wheelAngle += 360 * 5 + ((target - cur) + 360) % 360;
+  w.style.transform = 'rotate(' + UI.wheelAngle + 'deg)';
+}
+
+/* ---------- Per-device round actions ---------- */
+function playTarget() { if (LOCAL.target) playF32(LOCAL.target); }
+function playAudioOf(pid) { const f = LOCAL.audio[pid]; if (f) playF32(f); }
+async function doRecord(round) {
+  UI.recStart = performance.now();
+  let f = null;
+  if (AE.micOk && AE.recNode) {
+    try { ensureCtx(); f = resample(await recordPCM(CFG.REC_SEC), AE.ctx.sampleRate, CFG.SR); } catch (e) { console.warn(e); }
+  }
+  if (me.isHost) H.recs.set(me.id, f);
+  else if (hostConn && hostConn.open) { if (f) await sendBin(hostConn, { t: 'rec', round }, muEnc(f)); else hostConn.send({ t: 'rec', round, none: true }); }
+}
+
+/* ---------- Uploads ---------- */
+async function handleFiles(files) {
+  ensureCtx();
+  for (const f of files) {
+    if (!(f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(f.name))) { toast(f.name + ' is not an audio file.'); continue; }
+    if (S.clips.length >= CFG.MAX_CLIPS) { toast('The queue is full (' + CFG.MAX_CLIPS + ' sounds).'); break; }
+    if (S.clips.filter(c => c.owner === me.id).length >= CFG.MAX_CLIPS_PER_PLAYER) { toast('You can add up to ' + CFG.MAX_CLIPS_PER_PLAYER + ' sounds.'); break; }
+    if (f.size > CFG.MAX_FILE_MB * 1048576) { toast(f.name + ' is over ' + CFG.MAX_FILE_MB + ' MB.'); continue; }
+    try {
+      const full = await decodeFile(f), id = uid();
+      LOCAL.myClips.set(id, { full, start: 0 });
+      await submitClip(id, f.name.replace(/\.[^.]+$/, ''));
+    } catch (e) { toast('Could not read ' + f.name + '. Try an MP3, WAV or OGG file.'); }
+  }
+}
+async function submitClip(id, name) {
+  const c = LOCAL.myClips.get(id); if (!c) return;
+  const win = sliceWindow(c.full, c.start), meta = { id, name: clean(name, 40) };
+  if (me.isHost) hostAddClip(me.id, meta, win);
+  else if (hostConn && hostConn.open) await sendBin(hostConn, { t: 'clip', meta }, muEnc(win));
+}
+
+/* ===================================================================
+   UI rendering
+   =================================================================== */
+function toast(t) {
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = t;
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.classList.add('out'), 3200); setTimeout(() => el.remove(), 3700);
+}
+async function copyLink() {
+  const i = $('#room-link');
+  try { await navigator.clipboard.writeText(i.value); } catch (e) { i.select(); try { document.execCommand('copy'); } catch (e2) {} }
+  toast('Room link copied');
+}
+
+function renderAll() {
+  renderView();
+  if (UI.screen === 'lobby') { renderLobby(); renderPlayers(); renderClips(); }
+  else if (UI.screen === 'game') { renderStage(); renderBoard('board'); renderBanner(); }
+  else if (UI.screen === 'final') { renderFinal(); renderBoard('final-board'); }
+  else renderConnect();
+}
+function renderView() {
+  let v = 'connect';
+  if (!UI.fatal && S.hostId && myPlayer()) v = S.phase === 'lobby' ? 'lobby' : S.phase === 'final' ? 'final' : 'game';
+  UI.screen = v;
+  for (const id of ['connect', 'lobby', 'game', 'final']) $('#v-' + id).hidden = id !== v;
+  if (v !== 'game') { UI.stageKey = ''; clearInterval(UI.iv); }
+  $('#btn-end').hidden = !(me.isHost && v === 'game');
+}
+function renderConnect() {
+  const f = UI.fatal;
+  $('#conn-title').textContent = f ? 'This room is not available' : (UI.connMsg || 'One moment…');
+  $('#conn-sub').textContent = f || '';
+  $('#conn-spin').hidden = !!f; $('#conn-actions').hidden = !f;
+  $('#conn-home').href = location.pathname;
+}
+
+function renderLobby() {
+  const host = me.isHost, ok = AE.micOk && AE.ctx && AE.ctx.state === 'running';
+  $('#lobby-title').textContent = host ? 'Your room is ready' : 'You are in the room';
+  $('#lobby-sub').textContent = host ? 'Send the link to your friends. Everyone hears a sound, then tries to copy it with their voice.' : 'Add a sound of your own, turn on your mic, then wait for the host to start.';
+  $('#room-link').value = UI.roomLink || roomLink(S.hostId || '');
+  $('#room-code').textContent = (S.hostId || '').replace(CFG.ROOM_PREFIX, '');
+  $('#host-join').hidden = !host;
+  const a = $('#btn-audio'); a.textContent = ok ? 'Mic and sound are on' : 'Enable mic and sound'; a.disabled = !!ok;
+  $('#mic-meter').hidden = !AE.micOk;
+  $('#mic-hint').textContent = AE.micErr || (ok ? 'Say something. The bar should move.' : 'Your browser will ask for microphone access.');
+  const clips = S.clips.length, ps = S.players.filter(p => p.connected), noMic = ps.filter(p => !p.mic).length;
+  let hint;
+  if (!host) hint = 'Waiting for the host to start.';
+  else if (!clips) hint = 'Add at least one sound to start.';
+  else hint = ps.length + (ps.length === 1 ? ' player, ' : ' players, ') + clips + (clips === 1 ? ' round.' : ' rounds.') + (noMic ? ' ' + noMic + ' without a mic will score 0.' : '');
+  $('#start-hint').textContent = hint;
+  $('#btn-start').hidden = !host; $('#btn-start').disabled = host && !clips;
+  $('#pcount').textContent = S.players.length + ' of ' + CFG.MAX_PLAYERS;
+}
+function renderPlayers() {
+  if (document.activeElement && document.activeElement.id === 'name-input') return;
+  $('#players').innerHTML = S.players.map(p => {
+    const mine = p.id === me.id;
+    const nm = mine ? '<input class="name-input" id="name-input" value="' + esc(p.name) + '" maxlength="16" aria-label="Your name">' : '<span class="pname">' + esc(p.name) + '</span>';
+    return '<li class="pitem' + (p.connected ? '' : ' away') + '" style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span>' + nm +
+      (p.isHost ? '<span class="chip">Host</span>' : '') + '<span class="chip ' + (p.mic ? 'ok' : 'warn') + '">' + (p.mic ? 'Mic ready' : 'No mic yet') + '</span></li>';
+  }).join('');
+}
+function renderClips() {
+  const a = document.activeElement; if (a && a.classList && a.classList.contains('trim')) return;
+  const ul = $('#clips');
+  if (!S.clips.length) { ul.innerHTML = '<li class="empty">No sounds yet. Add one to unlock the start button.</li>'; return; }
+  ul.innerHTML = S.clips.map((c, i) => {
+    const mine = c.owner === me.id, mc = LOCAL.myClips.get(c.id);
+    const trim = mine && mc && mc.full.length > CFG.SR * (CFG.CLIP_SEC + 0.2)
+      ? '<label class="trim-l">Starts at <output>' + mc.start.toFixed(1) + 's</output><input class="trim" type="range" min="0" max="' + (mc.full.length / CFG.SR - CFG.CLIP_SEC).toFixed(1) + '" step="0.1" value="' + mc.start + '" data-id="' + c.id + '" aria-label="Start position for ' + esc(c.name) + '"></label>' : '';
+    return '<li class="citem"><span class="cnum">Round ' + (i + 1) + '</span><div class="cmain"><strong>' + esc(c.name) + '</strong><span class="muted">from ' + esc(c.ownerName) + ', ' + c.dur.toFixed(1) + 's</span>' + trim + '</div>' +
+      (mine && mc ? '<button class="btn small" data-act="preview" data-id="' + c.id + '">Preview</button>' : '') +
+      (mine || me.isHost ? '<button class="btn small ghost" data-act="remove" data-id="' + c.id + '" aria-label="Remove ' + esc(c.name) + '">Remove</button>' : '') + '</li>';
+  }).join('');
+}
+
+function renderBanner() {
+  const b = $('#banner'), ph = S.phase, items = [];
+  const mine = S.pending.filter(s => s.victim === me.id);
+  if (mine.length && ['loading', 'listen', 'countdown', 'record'].includes(ph))
+    items.push('<div class="alert bad">😈 You were sabotaged: ' + mine.map(s => FXMAP[s.effect].emoji + ' ' + FXMAP[s.effect].name + ' from ' + esc(nameOf(s.by))).join(', ') + '. Your recording will be mangled.</div>');
+  if (!AE.ctx || AE.ctx.state !== 'running') items.push('<div class="alert"><span>Sound is off on this device.</span><button class="btn small" data-act="audio">Turn on sound</button></div>');
+  else if (!AE.micOk) items.push('<div class="alert"><span>' + esc(AE.micErr || 'Your mic is off.') + ' You score 0 until it is on.</span><button class="btn small" data-act="audio">Enable mic</button></div>');
+  b.hidden = !items.length; b.innerHTML = items.join('');
+}
+
+function scoreAt(p, i) {
+  const v = p.scores[i]; if (v == null) return null;
+  if (S.phase === 'final' || i < S.round - 1) return v;
+  if (i === S.round - 1) { if (S.phase === 'results') return v; if (S.phase === 'playback' && S.revealed.includes(p.id)) return v; }
+  return null;
+}
+function renderBoard(id) {
+  const t = $('#' + id), n = Math.max(S.totalRounds, S.round);
+  const rows = S.players.map(p => { const cells = []; let tot = 0; for (let i = 0; i < n; i++) { const v = scoreAt(p, i); cells.push(v); if (v != null) tot += v; } return { p, cells, tot }; }).sort((a, b) => b.tot - a.tot);
+  t.innerHTML = '<thead><tr><th scope="col">Player</th>' + Array.from({ length: n }, (_, i) => '<th scope="col">R' + (i + 1) + '</th>').join('') + '<th scope="col">Total</th></tr></thead><tbody>' +
+    rows.map(r => '<tr class="' + (r.p.connected ? '' : 'away') + '"><th scope="row"><span class="dot" style="--pc:' + r.p.color + '"></span>' + esc(r.p.name) + '</th>' + r.cells.map(v => '<td>' + (v == null ? '–' : v) + '</td>').join('') + '<td class="tot">' + r.tot + '</td></tr>').join('') + '</tbody>';
+}
+
+/* ---------- Stage ---------- */
+function renderStage() {
+  const ph = S.phase, reveal = ph === 'playback' || ph === 'results';
+  const key = reveal ? 'reveal|' + S.round : ph + '|' + S.round;
+  $('#round-chip').textContent = S.round ? 'Round ' + S.round + ' of ' + S.totalRounds : '';
+  if (key !== UI.stageKey) { UI.stageKey = key; UI.shownPid = null; UI.infoKey = ''; buildStage(); }
+  if (reveal && S.results) updateReveal();
+}
+function wheelHTML() {
+  const segs = FX.map((f, i) => '<div class="seg" style="transform:rotate(' + (i * 90 + 45) + 'deg)"><span><em>' + f.emoji + '</em>' + f.name + '</span></div>').join('');
+  return '<div class="wheel-wrap"><div class="pointer"></div><div class="wheel" id="wheel" style="transform:rotate(' + UI.wheelAngle + 'deg)">' + segs + '</div></div>';
+}
+function buildStage() {
+  clearInterval(UI.iv);
+  const st = $('#stage'), ph = S.phase;
+  st.style.alignItems = ''; let html = '';
+  if (ph === 'loading') html = '<h2 class="stage-title">Round ' + S.round + ' of ' + S.totalRounds + '</h2><p class="muted">Getting the sound to everyone…</p><div class="dots"><i></i><i></i><i></i></div>';
+  else if (ph === 'listen') html = '<div class="ring" id="ring"></div><h2 class="stage-title">Listen closely</h2><p class="muted">Sound from ' + esc(S.roundClip ? S.roundClip.ownerName : 'someone') + '. Then you get ' + CFG.REC_SEC + ' seconds to copy it.</p>';
+  else if (ph === 'countdown') html = '<p class="muted">Get ready to copy it</p><div class="cd pop" id="cd" aria-live="assertive">3</div>';
+  else if (ph === 'record') html = '<div class="rec-badge" role="status"><i class="rec-dot"></i>RECORDING</div><div class="meter big" id="rec-meter"><i></i></div><div class="bar"><i id="recbar"></i></div><p class="muted">' + (AE.micOk ? 'Copy the sound with your voice.' : 'Your mic is off, so you will score 0 this round.') + '</p>';
+  else if (ph === 'processing') html = '<h2 class="stage-title">Judging your noises</h2><p class="muted">Comparing pitch movement and rhythm…</p><div class="dots"><i></i><i></i><i></i></div>';
+  else if (ph === 'playback' || ph === 'results') {
+    html = '<div class="reveal-grid"><div><div id="contour-slot" class="contour-slot"></div><div id="np-info" class="np-info"></div></div>' +
+      '<div><ul id="rank" class="rank"></ul><div id="wheel-col" class="wheel-col" hidden><h3>Sabotage wheel</h3>' + wheelHTML() + '<div id="wheel-ctl" class="wheel-ctl"></div></div></div></div><div id="next-slot" class="next-slot"></div>';
+    st.style.alignItems = 'stretch';
+  }
+  st.innerHTML = html;
+  if (ph === 'countdown') {
+    let n = 3; const el = $('#cd');
+    UI.iv = setInterval(() => { n--; if (n < 1) { clearInterval(UI.iv); return; } el.textContent = n; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }, 1000);
+  }
+}
+
+function contourSVG(kind, t, p, color) {
+  const W = 640, H = 240, pad = 18, N = t.length;
+  const vals = [...t, ...p].filter(v => v != null);
+  let lo = vals.length ? Math.min(...vals) : 0, hi = vals.length ? Math.max(...vals) : 1;
+  if (kind === 'energy') { lo = 0; hi = 1; }
+  else if (hi - lo < 6) { const c = (hi + lo) / 2; lo = c - 3; hi = c + 3; } else { lo -= 1; hi += 1; }
+  const X = i => pad + i * (W - 2 * pad) / (N - 1), Y = v => H - pad - (v - lo) / (hi - lo) * (H - 2 * pad);
+  const path = a => { let d = '', pen = false; a.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); pen = true; }); return d; };
+  let grid = ''; for (let i = 0; i < 4; i++) { const y = pad + i * (H - 2 * pad) / 3; grid += '<line x1="' + pad + '" x2="' + (W - pad) + '" y1="' + y + '" y2="' + y + '"/>'; }
+  return '<svg class="contour" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (kind === 'pitch' ? 'Pitch' : 'Volume') + ' over time, the sound versus this player"><g class="grid">' + grid + '</g><path class="c-target" d="' + path(t) + '"/><path class="c-player" pathLength="1" d="' + path(p) + '" style="--pc:' + color + '"/></svg>';
+}
+
+function updateReveal() {
+  const res = S.results, inRes = S.phase === 'results';
+  let pid;
+  if (inRes) {
+    const top = [...res.entries].sort((a, b) => b.score - a.score)[0];
+    pid = UI.pick && res.entries.some(e => e.id === UI.pick) ? UI.pick : (top && top.id);
+  } else pid = S.nowPlaying;
+  if (pid !== UI.shownPid) { UI.shownPid = pid; UI.infoKey = ''; renderContour(pid); }
+  renderInfo(pid); renderRank();
+  $('#wheel-col').hidden = !inRes;
+  if (inRes) updateWheelCtl();
+  updateNext();
+}
+function renderContour(pid) {
+  const slot = $('#contour-slot'), res = S.results, e = res.entries.find(x => x.id === pid), p = player(pid);
+  if (!e || !p) { slot.innerHTML = '<p class="muted">Here come the recordings…</p>'; return; }
+  if (!e.contour) { slot.innerHTML = '<p class="muted">No recording from ' + esc(p.name) + '.</p>'; return; }
+  slot.innerHTML = contourSVG(res.kind, res.target, e.contour, p.color) +
+    '<div class="legend"><span><i class="sw t"></i>The sound</span><span><i class="sw" style="--pc:' + p.color + '"></i>' + esc(p.name) + '</span></div>' +
+    '<p class="hint">' + (res.kind === 'pitch' ? 'Pitch over time, shifted to each voice\'s own key.' : 'Volume over time. This sound has no clear pitch.') + '</p>';
+}
+function renderInfo(pid) {
+  const box = $('#np-info'), res = S.results, e = res.entries.find(x => x.id === pid), p = player(pid);
+  const shown = !!e && (S.phase === 'results' || S.revealed.includes(pid));
+  const key = pid + '|' + shown; if (key === UI.infoKey) return; UI.infoKey = key;
+  if (!e || !p) { box.innerHTML = ''; return; }
+  const fx = e.fx.map(f => '<span class="tag" style="--tc:' + FXMAP[f.effect].color + '">' + FXMAP[f.effect].emoji + ' ' + FXMAP[f.effect].name + ' from ' + esc(nameOf(f.by)) + '</span>').join('');
+  const who = '<div class="who" style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span><strong>' + esc(p.name) + '</strong>' + (shown && e.winner ? '<span class="chip ok">Round winner</span>' : '') + '</div>';
+  if (!shown) { box.innerHTML = who + '<p class="muted">Listening…</p>' + (fx ? '<div class="tags">' + fx + '</div>' : ''); return; }
+  const stats = e.nomic || e.silent ? '' : '<div class="stats">' + (res.kind === 'pitch' ? '<span>Pitch match ' + e.pitch + '%</span>' : '<span>Tone ' + e.tone + '%</span>') + '<span>Rhythm ' + e.rhythm + '%</span></div>';
+  box.innerHTML = who + '<div class="score-line"><span class="bigscore">' + e.score + '</span><span class="outof">out of 100</span></div><p class="fb">' + esc(e.fb) + '</p>' + stats + (fx ? '<div class="tags">' + fx + '</div>' : '');
+}
+function renderRank() {
+  const res = S.results, inRes = S.phase === 'results';
+  const list = res.entries.map(e => ({ e, p: player(e.id) })).filter(x => x.p);
+  if (inRes) list.sort((a, b) => b.e.score - a.e.score);
+  else list.sort((a, b) => { const ra = S.revealed.indexOf(a.e.id), rb = S.revealed.indexOf(b.e.id); if (ra < 0 && rb < 0) return 0; if (ra < 0) return 1; if (rb < 0) return -1; return b.e.score - a.e.score; });
+  $('#rank').innerHTML = list.map(({ e, p }) => {
+    const shown = inRes || S.revealed.includes(e.id);
+    return '<li><button class="rrow' + (e.id === UI.shownPid ? ' on' : '') + '" ' + (inRes ? 'data-view="' + e.id + '"' : 'disabled') + ' style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span><span class="rname">' + esc(p.name) + '</span>' +
+      (inRes && p.spins > 0 ? '<span title="Has a sabotage spin">🎡</span>' : '') + '<span class="rscore">' + (shown ? e.score : '…') + '</span></button></li>';
+  }).join('');
+}
+function updateWheelCtl() {
+  const el = $('#wheel-ctl'), mp = myPlayer(), sp = S.spin;
+  const rivals = S.players.filter(p => p.id !== me.id && p.connected);
+  let h = '';
+  if (sp) {
+    const f = FXMAP[sp.effect];
+    if (sp.stage === 'spinning') h = '<p>' + esc(nameOf(sp.by)) + ' is spinning…</p>';
+    else if (sp.by === me.id) h = '<p>You landed on <b>' + f.emoji + ' ' + f.name + '</b>. Pick a victim.</p><div class="victims">' + rivals.map(p => '<button class="btn" data-victim="' + p.id + '" style="--pc:' + p.color + '">' + esc(p.name) + '</button>').join('') + '</div>';
+    else h = '<p>' + esc(nameOf(sp.by)) + ' landed on <b>' + f.emoji + ' ' + f.name + '</b> and is choosing a victim.</p>';
+  } else if (mp && mp.spins > 0 && rivals.length) h = '<button class="btn primary" id="btn-spin">Spin the wheel (' + mp.spins + ')</button><p class="hint">You earned it. The next round is on someone else\'s mic.</p>';
+  else {
+    const who = S.players.filter(p => p.spins > 0).map(p => p.name);
+    h = who.length ? '<p class="hint">' + esc(who.join(', ')) + (who.length === 1 ? ' has' : ' have') + ' a spin.</p>' : '<p class="hint">Winners and anyone scoring 80+ earn a spin.</p>';
+  }
+  if (S.pending.length) h += '<ul class="armed">' + S.pending.map(s => '<li>' + FXMAP[s.effect].emoji + ' ' + FXMAP[s.effect].name + ' on ' + esc(nameOf(s.victim)) + ' (from ' + esc(nameOf(s.by)) + ')</li>').join('') + '</ul>';
+  const k = h; if (el.dataset.k === k) return; el.dataset.k = k; el.innerHTML = h;
+}
+function updateNext() {
+  const el = $('#next-slot');
+  if (S.phase !== 'results') { el.innerHTML = ''; el.dataset.k = ''; return; }
+  const last = S.round >= S.totalRounds;
+  const key = me.isHost ? 'h|' + last + '|' + !!S.spin : 'c';
+  if (el.dataset.k === key) return; el.dataset.k = key;
+  el.innerHTML = me.isHost
+    ? '<button class="btn primary big" id="btn-next"' + (S.spin ? ' disabled' : '') + '>' + (last ? 'See final results' : 'Start round ' + (S.round + 1)) + '</button>' + (S.spin ? '<span class="hint">Finish the sabotage spin first.</span>' : '')
+    : '<p class="hint">Waiting for the host to continue.</p>';
+}
+
+function renderFinal() {
+  const ranked = [...S.players].sort((a, b) => b.total - a.total), w = ranked[0];
+  $('#final-title').textContent = w ? w.name + ' takes the crown' : 'Game over';
+  $('#final-sub').textContent = w ? (ranked.length > 1 && ranked[1].total === w.total ? 'It ended in a tie. Rematch?' : w.total + ' points across ' + S.totalRounds + (S.totalRounds === 1 ? ' round.' : ' rounds.')) : '';
+  $('#podium').innerHTML = ranked.slice(0, 3).map((p, i) => '<div class="pod p' + (i + 1) + '" style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span><strong>' + esc(p.name) + '</strong><span class="ptotal">' + p.total + '</span><div class="pbar" style="height:' + [120, 88, 62][i] + 'px"></div></div>').join('');
+  $('#btn-again').hidden = !me.isHost; $('#final-wait').hidden = me.isHost;
+}
+
+/* ---------- Animation loop: level meters and recording bar ---------- */
+const lvlBuf = new Uint8Array(512);
+function levelOf(an) {
+  an.getByteTimeDomainData(lvlBuf); let s = 0;
+  for (let i = 0; i < lvlBuf.length; i++) { const v = (lvlBuf[i] - 128) / 128; s += v * v; }
+  return clamp(Math.sqrt(s / lvlBuf.length) * 3.2, 0, 1);
+}
+function tick() {
+  if (!document.hidden) {
+    const ring = $('#ring'); if (ring && AE.outAn) ring.style.setProperty('--lvl', levelOf(AE.outAn).toFixed(3));
+    const mm = $('#mic-meter i'); if (mm && AE.micAn && UI.screen === 'lobby') mm.style.transform = 'scaleX(' + levelOf(AE.micAn).toFixed(3) + ')';
+    const rm = $('#rec-meter i'); if (rm && AE.micAn) rm.style.transform = 'scaleX(' + levelOf(AE.micAn).toFixed(3) + ')';
+    const rb = $('#recbar'); if (rb) rb.style.transform = 'scaleX(' + clamp((performance.now() - UI.recStart) / (CFG.REC_SEC * 1000), 0, 1).toFixed(3) + ')';
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------- Events ---------- */
+function renameSelf(v) {
+  const n = cleanName(v); if (!n) { renderPlayers(); return; }
+  me.name = n; try { localStorage.setItem('mimic-name', n); } catch (e) {}
+  if (me.isHost) { const p = myPlayer(); if (p) { p.name = n; pushState(); } } else toHost({ t: 'rename', name: n });
+}
+function bindUI() {
+  $('#btn-copy').onclick = copyLink;
+  $('#btn-audio').onclick = () => enableAudio();
+  $('#btn-start').onclick = () => { ensureCtx(); hostStart(); };
+  $('#btn-end').onclick = () => { if (confirm('End the game and send everyone back to the lobby?')) hostToLobby(); };
+  $('#btn-again').onclick = () => hostToLobby();
+  $('#vol').value = AE.volume; $('#vol').oninput = e => setVolume(+e.target.value);
+  $('#file').onchange = e => { handleFiles([...e.target.files]); e.target.value = ''; };
+  const drop = $('#drop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => handleFiles([...e.dataTransfer.files]));
+  $('#join-go').onclick = () => {
+    let v = $('#join-code').value.trim(); if (!v) return;
+    if (!v.toLowerCase().startsWith(CFG.ROOM_PREFIX)) v = CFG.ROOM_PREFIX + v.toUpperCase();
+    location.href = location.pathname + '?room=' + encodeURIComponent(v);
+  };
+  $('#players').addEventListener('change', e => { if (e.target.id === 'name-input') renameSelf(e.target.value); });
+  $('#players').addEventListener('focusout', e => { if (e.target.id === 'name-input') setTimeout(renderPlayers, 0); });
+  const clips = $('#clips');
+  clips.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    if (b.dataset.act === 'preview') { const mc = LOCAL.myClips.get(b.dataset.id); if (mc) { ensureCtx(); playF32(sliceWindow(mc.full, mc.start)); } }
+    else if (b.dataset.act === 'remove') { if (me.isHost) hostRemoveClip(me.id, b.dataset.id); else toHost({ t: 'clip-remove', id: b.dataset.id }); LOCAL.myClips.delete(b.dataset.id); }
+  });
+  clips.addEventListener('input', e => { if (e.target.classList.contains('trim')) e.target.parentElement.querySelector('output').textContent = (+e.target.value).toFixed(1) + 's'; });
+  clips.addEventListener('change', e => {
+    if (!e.target.classList.contains('trim')) return;
+    const mc = LOCAL.myClips.get(e.target.dataset.id), meta = S.clips.find(c => c.id === e.target.dataset.id);
+    if (mc && meta) { mc.start = +e.target.value; submitClip(meta.id, meta.name); }
+    e.target.blur(); renderClips();
+  });
+  $('#banner').addEventListener('click', e => { if (e.target.closest('[data-act="audio"]')) enableAudio(); });
+  $('#stage').addEventListener('click', e => {
+    const row = e.target.closest('[data-view]');
+    if (row && S.phase === 'results') { UI.pick = row.dataset.view; ensureCtx(); playAudioOf(UI.pick); updateReveal(); return; }
+    const vic = e.target.closest('[data-victim]');
+    if (vic) { toHost({ t: 'sabotage', victim: vic.dataset.victim }); return; }
+    if (e.target.closest('#btn-spin')) { toHost({ t: 'spin' }); return; }
+    if (e.target.closest('#btn-next') && me.isHost) hostNext();
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && AE.ctx && AE.ctx.state === 'suspended') AE.ctx.resume().catch(() => {}); });
+  window.addEventListener('beforeunload', () => { try { peer && peer.destroy(); } catch (e) {} });
+}
+
+/* ---------- Boot ---------- */
+function boot() {
+  bindUI(); requestAnimationFrame(tick);
+  let room = new URLSearchParams(location.search).get('room');
+  if (room) {
+    room = room.trim();
+    if (!room.toLowerCase().startsWith(CFG.ROOM_PREFIX) && /^[A-Za-z0-9]{4,8}$/.test(room)) room = CFG.ROOM_PREFIX + room.toUpperCase();
+    startClient(room);
+  } else startHost();
+}
+boot();
+</script>
+</body>
+</html>
