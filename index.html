@@ -352,6 +352,11 @@ const CFG = {
 //   { urls: 'turn:HOST:443?transport=tcp', username: 'USER', credential: 'PASS' },
 //   { urls: 'turns:HOST:443?transport=tcp', username: 'USER', credential: 'PASS' }
 const EXTRA_TURN = [
+  { urls: 'stun:stun.relay.metered.ca:80' },
+  { urls: 'turn:global.relay.metered.ca:80', username: 'b2aac19d26e432eb83e48f5c', credential: 'htpS2lj4csdIv0jd' },
+  { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'b2aac19d26e432eb83e48f5c', credential: 'htpS2lj4csdIv0jd' },
+  { urls: 'turn:global.relay.metered.ca:443', username: 'b2aac19d26e432eb83e48f5c', credential: 'htpS2lj4csdIv0jd' },
+  { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'b2aac19d26e432eb83e48f5c', credential: 'htpS2lj4csdIv0jd' }
 ];
 function buildIce() {
   const base = [
