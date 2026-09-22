@@ -159,6 +159,16 @@ h1,h2,h3,p{margin:0}
 .armed{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font-size:.88rem;color:var(--muted)}
 .next-slot{display:flex;align-items:center;justify-content:center;gap:1rem;margin-top:1.4rem;width:100%;flex-wrap:wrap}
 
+.dlg{color:var(--text);width:min(92vw,540px);padding:1.5rem;border:1px solid var(--line);border-radius:28px;background:rgba(26,19,56,.97);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.dlg::backdrop{background:rgba(5,2,20,.65);backdrop-filter:blur(4px)}
+.dlg h2{font-size:1.35rem;font-weight:800;margin-bottom:.4rem}
+.checks{list-style:none;margin:1rem 0;padding:0;display:grid;gap:.5rem}
+.checks li{display:grid;grid-template-columns:auto 1fr;gap:.2rem .7rem;padding:.6rem .8rem;border-radius:14px;background:rgba(255,255,255,.05)}
+.checks .ic{grid-row:span 2;font-size:1.2rem;line-height:1.4}
+.checks .sub{font-size:.85rem;color:var(--muted);word-break:break-word}
+.verdict{padding:.8rem 1rem;border-radius:16px;background:rgba(255,200,87,.12);border:1px solid rgba(255,200,87,.35);margin-bottom:1rem}
+.verdict.good{background:rgba(94,240,192,.12);border-color:rgba(94,240,192,.4)}
+.dlg .row{display:flex;gap:.6rem;flex-wrap:wrap}
 .tablewrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:.92rem}
 th,td{padding:.4rem .5rem;text-align:right;white-space:nowrap}
@@ -210,6 +220,7 @@ td.tot{font-weight:800;color:var(--amber)}
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
         <input id="vol" type="range" min="0" max="1" step="0.05" value="0.9">
       </label>
+      <button class="btn small ghost" id="btn-check">Connection check</button>
       <button class="btn small" id="btn-end" hidden>End game</button>
     </div>
   </header>
@@ -220,7 +231,7 @@ td.tot{font-weight:800;color:var(--amber)}
       <div class="spinner" id="conn-spin"></div>
       <h1 id="conn-title">Setting up your room</h1>
       <p class="muted" id="conn-sub"></p>
-      <div id="conn-actions" hidden><a class="btn primary" id="conn-home" href="./">Start your own room</a></div>
+      <div id="conn-actions" hidden class="row-actions"><button class="btn primary" id="conn-check">Run connection check</button> <a class="btn" id="conn-home" href="./">Start your own room</a></div>
     </section>
 
     <!-- Lobby -->
@@ -297,6 +308,17 @@ td.tot{font-weight:800;color:var(--amber)}
     </section>
   </main>
 </div>
+<dialog id="check-dlg" class="dlg" aria-labelledby="check-h">
+  <h2 id="check-h">Connection check</h2>
+  <p class="hint">Run this on the device that cannot join. It takes about 10 seconds.</p>
+  <ul class="checks" id="check-out"></ul>
+  <div class="verdict" id="check-verdict" hidden></div>
+  <div class="row">
+    <button class="btn primary" id="check-run">Run check</button>
+    <button class="btn" id="check-copy" hidden>Copy report</button>
+    <button class="btn ghost" id="check-close">Close</button>
+  </div>
+</dialog>
 <div id="toasts" role="status" aria-live="polite"></div>
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -323,8 +345,13 @@ const CFG = {
 
 // STUN servers requested for the game. Add your own TURN server(s) below for networks
 // where direct connections fail (symmetric NAT, corporate Wi-Fi, some mobile carriers).
+// Paste the iceServers array your TURN provider gives you (Metered Open Relay, ExpressTURN, Cloudflare...).
+// Prefer entries that use TCP/TLS on port 443 (turns:...:443?transport=tcp): they get through strict firewalls
+// that block UDP. Example shape:
+//   { urls: 'turn:HOST:80', username: 'USER', credential: 'PASS' },
+//   { urls: 'turn:HOST:443?transport=tcp', username: 'USER', credential: 'PASS' },
+//   { urls: 'turns:HOST:443?transport=tcp', username: 'USER', credential: 'PASS' }
 const EXTRA_TURN = [
-  // { urls: 'turn:YOUR_TURN_HOST:443?transport=tcp', username: 'USER', credential: 'PASS' }
 ];
 function buildIce() {
   const base = [
@@ -344,7 +371,9 @@ function buildIce() {
   }
   return out;
 }
-const peerOpts = () => ({ debug: 1, config: { iceServers: buildIce() } });
+// Add ?relay=1 to the room link on ONE device to force everything through TURN (proves the relay works).
+const FORCE_RELAY = new URLSearchParams(location.search).has('relay');
+const peerOpts = () => ({ debug: 1, config: Object.assign({ iceServers: buildIce() }, FORCE_RELAY ? { iceTransportPolicy: 'relay' } : {}) });
 
 /* ---------- Small helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -904,18 +933,26 @@ function startClient(roomId) {
   me.isHost = false; UI.connMsg = 'Joining the room…'; renderAll();
   if (typeof Peer === 'undefined') { fatal('PeerJS could not load. Check your connection and reload the page.'); return; }
   peer = new Peer(undefined, peerOpts());
-  const timeout = setTimeout(() => { if (!UI.joined) fatal('Could not reach the host. Check the link, or the network may be blocking direct connections (a TURN server fixes that).'); }, 20000);
+  const timeout = setTimeout(() => {
+    if (UI.joined) return;
+    if (!UI.brokerOk) fatal('Could not reach the matchmaking server (0.peerjs.com). A VPN, ad blocker or network filter may be blocking it. Run the connection check for details.');
+    else fatal('Found the room but could not open a link to the host (network state: ' + (UI.iceState || 'never started') + '). This is usually a firewall or NAT problem, and a TURN relay fixes it. Run the connection check for details.');
+  }, 25000);
   peer.on('open', id => {
-    me.id = id;
+    UI.brokerOk = true; me.id = id;
     hostConn = peer.connect(roomId, { reliable: true });
+    hostConn.on('iceStateChanged', s => { UI.iceState = s; if (!UI.joined) { UI.connMsg = 'Joining the room… (' + s + ')'; renderAll(); } });
     hostConn.on('open', () => { UI.joined = true; clearTimeout(timeout); hostConn.send({ t: 'hello', name: me.name }); });
     hostConn.on('data', d => handleRaw('host', d, clientHandle));
     hostConn.on('close', () => { if (!UI.fatal) fatal('The host closed the room.'); });
-    hostConn.on('error', e => fatal('Connection error: ' + ((e && e.type) || e)));
+    hostConn.on('error', e => {
+      const t = (e && e.type) || String(e);
+      fatal(t === 'negotiation-failed' ? 'Your networks could not reach each other directly, and there was no working relay (negotiation-failed). A TURN relay fixes this. Run the connection check for details.' : 'Connection error: ' + t);
+    });
   });
   peer.on('error', err => {
     if (err.type === 'peer-unavailable') fatal('That room does not exist anymore. Ask the host for a fresh link.');
-    else if (!UI.joined) fatal('Could not connect (' + err.type + ').');
+    else if (!UI.joined) fatal('Could not connect (' + err.type + '). Run the connection check for details.');
   });
   peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
 }
@@ -1373,6 +1410,68 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
+
+/* ===================================================================
+   Connection check: tells you exactly which part of the network path fails
+   =================================================================== */
+const NET = { report: '' };
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
+async function checkBrokerHttp() {
+  try { const c = new AbortController(), t = setTimeout(() => c.abort(), 6000);
+    const r = await fetch('https://0.peerjs.com/peerjs/id?ts=' + Date.now(), { signal: c.signal }); clearTimeout(t); return r.ok; } catch (e) { return false; }
+}
+function checkBrokerWs() {
+  return new Promise(res => {
+    let ws, done = false; const end = ok => { if (done) return; done = true; try { ws.close(); } catch (e) {} res(ok); };
+    try { ws = new WebSocket('wss://0.peerjs.com/peerjs?key=peerjs&id=chk' + uid() + uid() + '&token=' + uid()); } catch (e) { return res(false); }
+    ws.onopen = () => end(true); ws.onerror = () => end(false); setTimeout(() => end(false), 6000);
+  });
+}
+async function checkIce() {
+  const servers = buildIce(), found = {}, errs = [];
+  if (typeof RTCPeerConnection === 'undefined') return { found, errs, unsupported: true, servers };
+  const pc = new RTCPeerConnection({ iceServers: servers });
+  pc.createDataChannel('check');
+  pc.onicecandidate = e => { if (e.candidate) { const m = / typ (\w+)/.exec(e.candidate.candidate); if (m) found[m[1]] = (found[m[1]] || 0) + 1; } };
+  pc.onicecandidateerror = e => errs.push({ url: e.url || '', code: e.errorCode, text: e.errorText || '' });
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise(res => { const t = setTimeout(res, 9000); pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }; });
+  pc.close();
+  return { found, errs, servers };
+}
+async function runNetCheck() {
+  const out = $('#check-out'), verdict = $('#check-verdict');
+  $('#check-run').disabled = true; $('#check-copy').hidden = true; verdict.hidden = true;
+  const rows = [];
+  const show = () => { out.innerHTML = rows.map(r => '<li><span class="ic">' + r.ic + '</span><strong>' + esc(r.t) + '</strong><span class="sub">' + esc(r.s) + '</span></li>').join(''); };
+  const add = (ic, t, s) => { rows.push({ ic, t, s }); show(); };
+  out.innerHTML = '<li><span class="ic">⏳</span><strong>Testing…</strong><span class="sub">Please wait a few seconds.</span></li>';
+  const [http, ws, ice] = await Promise.all([checkBrokerHttp(), checkBrokerWs(), withTimeout(checkIce(), 12000)]);
+  out.innerHTML = '';
+  add(http ? '✅' : '❌', 'Matchmaking server (HTTPS)', http ? 'Reachable.' : 'Blocked or unreachable.');
+  add(ws ? '✅' : '❌', 'Matchmaking server (WebSocket)', ws ? 'Reachable.' : 'Blocked or unreachable. Rooms cannot be created or joined.');
+  let stun = false, relay = false, turnCount = 0;
+  if (!ice || ice.unsupported) add('❌', 'WebRTC', 'This browser cannot run WebRTC.');
+  else {
+    stun = (ice.found.srflx || 0) > 0; relay = (ice.found.relay || 0) > 0;
+    turnCount = ice.servers.filter(s => [].concat(s.urls).some(u => /^turns?:/.test(u))).length;
+    add(stun ? '✅' : '⚠️', 'STUN (public address discovery)', stun ? 'Works. Direct connections are possible on many networks.' : 'No public address found. UDP may be blocked here.');
+    if (!turnCount) add('❌', 'TURN relay', 'No TURN server is configured.');
+    else add(relay ? '✅' : '❌', 'TURN relay', relay ? 'Works. If a direct link fails, traffic can go through the relay.' : 'Configured but unreachable from this network. ' + (ice.errs.length ? 'Errors: ' + ice.errs.map(e => (e.url || 'server') + ' ' + e.code).join(', ') : 'No response.'));
+  }
+  let msg, good = false;
+  if (!http || !ws) msg = 'This device cannot reach the matchmaking server, so nobody can join from here. Try turning off any VPN or ad blocker, or switch networks (mobile data is a good test).';
+  else if (relay) { msg = 'Everything you need is working. If joining still fails, tell me the exact message shown on the error screen.'; good = true; }
+  else if (!turnCount) msg = 'The only thing missing is a TURN relay. Add TURN credentials to EXTRA_TURN in the file. Without one, two networks that cannot see each other directly will never connect.';
+  else msg = 'The relay servers are configured but this network cannot reach them (often UDP is blocked). Use a TURN service that also listens on TCP or TLS port 443.';
+  verdict.textContent = msg; verdict.className = 'verdict' + (good ? ' good' : ''); verdict.hidden = false;
+  NET.report = ['Mimic Party connection check', 'Matchmaking HTTPS: ' + http, 'Matchmaking WebSocket: ' + ws,
+    'ICE candidates found: ' + JSON.stringify(ice && ice.found), 'TURN entries configured: ' + turnCount, 'ICE errors: ' + JSON.stringify(ice && ice.errs),
+    'Browser: ' + navigator.userAgent].join('\n');
+  $('#check-copy').hidden = false; $('#check-run').disabled = false; $('#check-run').textContent = 'Run again';
+}
+function openCheck() { const d = $('#check-dlg'); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+
 /* ---------- Events ---------- */
 function renameSelf(v) {
   const n = cleanName(v); if (!n) { renderPlayers(); return; }
@@ -1381,6 +1480,11 @@ function renameSelf(v) {
 }
 function bindUI() {
   $('#btn-copy').onclick = copyLink;
+  $('#btn-check').onclick = () => { openCheck(); };
+  $('#conn-check').onclick = () => { openCheck(); runNetCheck(); };
+  $('#check-run').onclick = runNetCheck;
+  $('#check-close').onclick = () => { const d = $('#check-dlg'); if (d.close) d.close(); else d.removeAttribute('open'); };
+  $('#check-copy').onclick = async () => { try { await navigator.clipboard.writeText(NET.report); toast('Report copied'); } catch (e) { toast('Could not copy. Select the text manually.'); } };
   $('#btn-audio').onclick = () => enableAudio();
   $('#btn-start').onclick = () => { ensureCtx(); hostStart(); };
   $('#btn-end').onclick = () => { if (confirm('End the game and send everyone back to the lobby?')) hostToLobby(); };
