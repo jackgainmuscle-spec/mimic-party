@@ -119,6 +119,8 @@ h1,h2,h3,p{margin:0}
 .bar{width:min(100%,420px);height:12px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
 .bar i{display:block;height:100%;background:#ff4560;transform-origin:left;transform:scaleX(0)}
 .meter.big{width:min(100%,420px);height:14px}
+.rec-area{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;min-height:210px}
+.rec-roster{width:100%;max-width:460px;margin:0 auto}
 
 .reveal-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:1.4rem;width:100%;text-align:left;align-items:start}
 .contour-slot{min-height:190px;display:grid;align-items:center}
@@ -775,13 +777,14 @@ function sliceWindow(full, start) {
    =================================================================== */
 const COLORS = ['#ff5c93', '#5b8cff', '#ffc857', '#5ef0c0', '#b58cff', '#ff8a4c', '#4fd6ff', '#b6e64c'];
 const newState = () => ({ phase: 'lobby', hostId: null, players: [], clips: [], round: 0, totalRounds: 0, roundClip: null,
-  pending: [], spin: null, results: null, nowPlaying: null, revealed: [] });
+  pending: [], spin: null, results: null, nowPlaying: null, revealed: [], recTurn: null, recNonce: 0 });
 let S = newState();
 const me = { id: null, isHost: false, name: '' };
 const UI = { screen: null, fatal: null, connMsg: 'Setting up your room…', roomLink: '', stageKey: '', shownPid: null, infoKey: '', pick: null,
-  wheelAngle: 0, recStart: 0, iv: null, joined: false };
+  wheelAngle: 0, recStart: 0, iv: null, joined: false, turnKey: '', localSub: null, localCount: 3 };
 const LOCAL = { target: null, audio: {}, myClips: new Map() };  // per-device data (never in S)
-const H = { conns: new Map(), clips: new Map(), order: [], recs: new Map(), ready: new Set(), targetAn: null, run: 0, timers: [] }; // host-only
+const H = { conns: new Map(), clips: new Map(), order: [], recs: new Map(), ready: new Set(), targetAn: null, run: 0, timers: [],
+  forceAdvance: false, turnTimeoutId: null }; // host-only
 let peer = null, hostConn = null;
 
 const player = id => S.players.find(p => p.id === id);
@@ -797,7 +800,7 @@ if (!me.name) me.name = rand(ADJ) + ' ' + rand(ANI);
 function addPlayer(id, name, isHost) {
   const used = new Set(S.players.map(p => p.color));
   S.players.push({ id, name: cleanName(name) || 'Player', color: COLORS.find(c => !used.has(c)) || rand(COLORS), isHost: !!isHost,
-    mic: false, sound: false, connected: true, scores: [], total: 0, spins: 0 });
+    mic: false, sound: false, connected: true, scores: [], total: 0, spins: 0, recorded: false });
 }
 
 /* ===================================================================
@@ -846,7 +849,7 @@ function pushState() {
     const snap = JSON.parse(JSON.stringify(S));
     for (const c of activeConns()) c.send({ t: 'state', s: snap });
   }
-  renderAll();
+  renderAll(); maybeStartMyTurn();
 }
 
 /* ---------- Host: connections ---------- */
@@ -888,7 +891,11 @@ function hostDrop(id) {
   if (!H.conns.has(id)) return;
   H.conns.delete(id);
   const p = player(id); if (!p) return;
-  if (S.phase === 'lobby') S.players = S.players.filter(x => x.id !== id); else p.connected = false;
+  if (S.phase === 'lobby') S.players = S.players.filter(x => x.id !== id);
+  else {
+    p.connected = false;
+    if (S.phase === 'record' && S.recTurn === id) { clearTurnTimeout(); H.recs.set(id, H.recs.get(id) || null); p.recorded = true; S.recTurn = null; }
+  }
   toast(p.name + ' left'); pushState();
 }
 
@@ -904,7 +911,8 @@ function hostHandle(conn, m) {
     case 'clip': if (m.bytes && m.meta) hostAddClip(id, m.meta, muDec(m.bytes)); break;
     case 'clip-remove': hostRemoveClip(id, m.id); break;
     case 'ready': if (m.round === S.round) H.ready.add(id); break;
-    case 'rec': if (m.round === S.round && S.phase === 'record') H.recs.set(id, m.bytes && !m.none ? muDec(m.bytes) : null); break;
+    case 'want-record': hostWantRecord(id); break;
+    case 'rec': if (m.round === S.round && S.phase === 'record') hostFinalizeRec(id, m.bytes && !m.none ? muDec(m.bytes) : null); break;
     case 'spin': hostSpin(id); break;
     case 'sabotage': hostSabotage(id, m.victim); break;
   }
@@ -969,7 +977,6 @@ function clientHandle(m) {
     case 'toast': toast(m.text); break;
     case 'round': LOCAL.target = muDec(m.bytes); LOCAL.audio = {}; if (hostConn && hostConn.open) hostConn.send({ t: 'ready', round: m.round }); break;
     case 'go': playTarget(); break;
-    case 'record': doRecord(m.round); break;
     case 'audio': LOCAL.audio[m.pid] = muDec(m.bytes); break;
     case 'play': playAudioOf(m.pid); break;
     case 'spin-start': animateWheel(m.effect); break;
@@ -980,7 +987,7 @@ function applyState(s) {
   S = s; UI.connMsg = null;
   if (S.phase !== prevPhase && (S.phase === 'lobby' || S.phase === 'final')) stopPlayback();
   if (S.round !== prevRound || S.phase === 'loading') UI.pick = null;
-  renderAll();
+  renderAll(); maybeStartMyTurn();
 }
 function announceStatus() {
   const st = { mic: !!AE.micOk, sound: !!(AE.ctx && AE.ctx.state === 'running') };
@@ -1025,11 +1032,10 @@ async function hostPlayRound() {
     S.phase = 'listen'; pushState(); broadcast({ t: 'go' }); playTarget();
     await sleep(S.roundClip.dur * 1000 + 900); if (!alive()) return;
 
-    S.phase = 'countdown'; pushState(); await sleep(3300); if (!alive()) return;
-
-    S.phase = 'record'; pushState(); broadcast({ t: 'record', round: S.round }); doRecord(S.round);
-    await sleep(CFG.REC_SEC * 1000 + 400);
-    await waitFor(() => connectedIds().every(id => H.recs.has(id)), 9000, alive); if (!alive()) return;
+    S.phase = 'record'; for (const p of S.players) p.recorded = false; S.recTurn = null; H.forceAdvance = false; pushState();
+    await waitFor(() => connectedIds().every(id => H.recs.has(id)) || H.forceAdvance, 6 * 60 * 1000, alive);
+    if (!alive()) return;
+    clearTurnTimeout(); H.forceAdvance = false; S.recTurn = null;
 
     S.phase = 'processing'; pushState(); await sleep(60);
     await hostJudge(alive); if (!alive()) return;
@@ -1100,12 +1106,31 @@ function hostNext() {
   if (S.round >= S.totalRounds) { S.phase = 'final'; pushState(); } else hostPlayRound();
 }
 function hostToLobby() {
-  H.run++; stopPlayback(); H.timers.forEach(clearTimeout); H.timers = [];
-  S.phase = 'lobby'; S.round = 0; S.totalRounds = 0; S.results = null; S.nowPlaying = null; S.revealed = []; S.pending = []; S.spin = null; S.roundClip = null;
+  H.run++; stopPlayback(); H.timers.forEach(clearTimeout); H.timers = []; clearTurnTimeout(); H.forceAdvance = false;
+  S.phase = 'lobby'; S.round = 0; S.totalRounds = 0; S.results = null; S.nowPlaying = null; S.revealed = []; S.pending = []; S.spin = null; S.roundClip = null; S.recTurn = null;
   S.players = S.players.filter(p => p.connected);
-  for (const p of S.players) { p.scores = []; p.total = 0; p.spins = 0; }
+  for (const p of S.players) { p.scores = []; p.total = 0; p.spins = 0; p.recorded = false; }
   pushState();
 }
+
+/* ---------- Turn-based recording (one mic hot at a time, so co-located players don't bleed into each other) ---------- */
+function clearTurnTimeout() { if (H.turnTimeoutId) { clearTimeout(H.turnTimeoutId); H.turnTimeoutId = null; } }
+function hostWantRecord(id) {
+  const p = player(id);
+  if (S.phase !== 'record' || !p || !p.connected || p.recorded) return;
+  if (S.recTurn && S.recTurn !== id) return;
+  S.recTurn = id; S.recNonce++; pushState();
+  clearTurnTimeout();
+  H.turnTimeoutId = setTimeout(() => { if (S.recTurn === id && !p.recorded) hostFinalizeRec(id, null); }, CFG.REC_SEC * 1000 + 8000);
+}
+function hostFinalizeRec(id, f) {
+  H.recs.set(id, f);
+  const p = player(id); if (p) p.recorded = true;
+  if (S.recTurn === id) S.recTurn = null;
+  clearTurnTimeout();
+  pushState();
+}
+function hostForceAdvanceRecording() { if (me.isHost && S.phase === 'record') H.forceAdvance = true; }
 
 /* ---------- Sabotage wheel ---------- */
 function hostSpin(id) {
@@ -1146,8 +1171,34 @@ async function doRecord(round) {
   if (AE.micOk && AE.recNode) {
     try { ensureCtx(); f = resample(await recordPCM(CFG.REC_SEC), AE.ctx.sampleRate, CFG.SR); } catch (e) { console.warn(e); }
   }
-  if (me.isHost) H.recs.set(me.id, f);
+  if (me.isHost) hostFinalizeRec(me.id, f);
   else if (hostConn && hostConn.open) { if (f) await sendBin(hostConn, { t: 'rec', round }, muEnc(f)); else hostConn.send({ t: 'rec', round, none: true }); }
+}
+
+/* Only one player's mic is "hot" at a time, so people in the same room don't bleed into each other's recordings. */
+function maybeStartMyTurn() {
+  if (S.phase !== 'record' || S.recTurn !== me.id) return;
+  const key = S.round + ':' + S.recNonce;
+  if (UI.turnKey === key) return;
+  UI.turnKey = key; runMyRecordTurn(S.round);
+}
+function localCountdown() {
+  return new Promise(resolve => {
+    UI.localSub = 'countdown'; UI.localCount = 3; updateRecordStage();
+    UI.iv = setInterval(() => {
+      UI.localCount--;
+      if (UI.localCount < 1) { clearInterval(UI.iv); resolve(); return; }
+      updateRecordStage();
+    }, 1000);
+  });
+}
+async function runMyRecordTurn(round) {
+  ensureCtx(); UI.localSub = 'starting'; updateRecordStage();
+  if (AE.micOk) await localCountdown(); else { UI.localSub = 'nomic'; updateRecordStage(); await sleep(500); }
+  if (S.phase !== 'record' || S.recTurn !== me.id) { UI.localSub = null; return; }  // turn was revoked (timeout) while we were getting ready
+  UI.localSub = 'recording'; updateRecordStage();
+  await doRecord(round);
+  UI.localSub = null;
 }
 
 /* ---------- Uploads ---------- */
@@ -1254,7 +1305,7 @@ function renderClips() {
 function renderBanner() {
   const b = $('#banner'), ph = S.phase, items = [];
   const mine = S.pending.filter(s => s.victim === me.id);
-  if (mine.length && ['loading', 'listen', 'countdown', 'record'].includes(ph))
+  if (mine.length && ['loading', 'listen', 'record'].includes(ph))
     items.push('<div class="alert bad">😈 You were sabotaged: ' + mine.map(s => FXMAP[s.effect].emoji + ' ' + FXMAP[s.effect].name + ' from ' + esc(nameOf(s.by))).join(', ') + '. Your recording will be mangled.</div>');
   if (!AE.ctx || AE.ctx.state !== 'running') items.push('<div class="alert"><span>Sound is off on this device.</span><button class="btn small" data-act="audio">Turn on sound</button></div>');
   else if (!AE.micOk) items.push('<div class="alert"><span>' + esc(AE.micErr || 'Your mic is off.') + ' You score 0 until it is on.</span><button class="btn small" data-act="audio">Enable mic</button></div>');
@@ -1280,6 +1331,7 @@ function renderStage() {
   const key = reveal ? 'reveal|' + S.round : ph + '|' + S.round;
   $('#round-chip').textContent = S.round ? 'Round ' + S.round + ' of ' + S.totalRounds : '';
   if (key !== UI.stageKey) { UI.stageKey = key; UI.shownPid = null; UI.infoKey = ''; buildStage(); }
+  if (ph === 'record') updateRecordStage();
   if (reveal && S.results) updateReveal();
 }
 function wheelHTML() {
@@ -1291,9 +1343,8 @@ function buildStage() {
   const st = $('#stage'), ph = S.phase;
   st.style.alignItems = ''; let html = '';
   if (ph === 'loading') html = '<h2 class="stage-title">Round ' + S.round + ' of ' + S.totalRounds + '</h2><p class="muted">Getting the sound to everyone…</p><div class="dots"><i></i><i></i><i></i></div>';
-  else if (ph === 'listen') html = '<div class="ring" id="ring"></div><h2 class="stage-title">Listen closely</h2><p class="muted">Sound from ' + esc(S.roundClip ? S.roundClip.ownerName : 'someone') + '. Then you get ' + CFG.REC_SEC + ' seconds to copy it.</p>';
-  else if (ph === 'countdown') html = '<p class="muted">Get ready to copy it</p><div class="cd pop" id="cd" aria-live="assertive">3</div>';
-  else if (ph === 'record') html = '<div class="rec-badge" role="status"><i class="rec-dot"></i>RECORDING</div><div class="meter big" id="rec-meter"><i></i></div><div class="bar"><i id="recbar"></i></div><p class="muted">' + (AE.micOk ? 'Copy the sound with your voice.' : 'Your mic is off, so you will score 0 this round.') + '</p>';
+  else if (ph === 'listen') html = '<div class="ring" id="ring"></div><h2 class="stage-title">Listen closely</h2><p class="muted">Sound from ' + esc(S.roundClip ? S.roundClip.ownerName : 'someone') + '. Then you take turns recording ' + CFG.REC_SEC + ' seconds each.</p>';
+  else if (ph === 'record') { html = '<div id="rec-area" class="rec-area"></div><ul id="rec-roster" class="plist rec-roster"></ul>'; st.style.alignItems = 'stretch'; }
   else if (ph === 'processing') html = '<h2 class="stage-title">Judging your noises</h2><p class="muted">Comparing pitch movement and rhythm…</p><div class="dots"><i></i><i></i><i></i></div>';
   else if (ph === 'playback' || ph === 'results') {
     html = '<div class="reveal-grid"><div><div id="contour-slot" class="contour-slot"></div><div id="np-info" class="np-info"></div></div>' +
@@ -1301,9 +1352,38 @@ function buildStage() {
     st.style.alignItems = 'stretch';
   }
   st.innerHTML = html;
-  if (ph === 'countdown') {
-    let n = 3; const el = $('#cd');
-    UI.iv = setInterval(() => { n--; if (n < 1) { clearInterval(UI.iv); return; } el.textContent = n; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }, 1000);
+  if (ph === 'record') { UI.localSub = null; UI.turnKey = ''; updateRecordStage(); maybeStartMyTurn(); }
+}
+
+/* One player records at a time: shows whoever's turn it is, a Record button when the floor is open, and everyone else's status. */
+function updateRecordStage() {
+  const area = $('#rec-area'), roster = $('#rec-roster'); if (!area || !roster) return;
+  const mp = myPlayer(), turnP = S.recTurn ? player(S.recTurn) : null;
+  let html;
+  if (mp && mp.recorded) {
+    html = '<h2 class="stage-title">You\'re done</h2><p class="muted">Waiting for everyone else to take their turn…</p><div class="dots"><i></i><i></i><i></i></div>';
+  } else if (turnP && turnP.id === me.id) {
+    if (UI.localSub === 'countdown') html = '<p class="muted">Get ready to copy it</p><div class="cd pop" id="cd" aria-live="assertive">' + UI.localCount + '</div>';
+    else if (UI.localSub === 'recording') html = '<div class="rec-badge" role="status"><i class="rec-dot"></i>RECORDING</div><div class="meter big" id="rec-meter"><i></i></div><div class="bar"><i id="recbar"></i></div><p class="muted">Copy the sound with your voice. Everyone else, stay quiet!</p>';
+    else if (UI.localSub === 'nomic') html = '<h2 class="stage-title">No mic, no recording</h2><p class="muted">Your mic is off, so this turn is skipped. You will score 0 this round.</p><div class="dots"><i></i><i></i><i></i></div>';
+    else html = '<h2 class="stage-title">Your turn</h2><p class="muted">Getting ready…</p><div class="dots"><i></i><i></i><i></i></div>';
+  } else if (turnP) {
+    html = '<h2 class="stage-title">' + esc(turnP.name) + ' is recording</h2><p class="muted">Everyone else, please stay quiet for a few seconds.</p><div class="dots"><i></i><i></i><i></i></div>';
+  } else {
+    html = '<h2 class="stage-title">Your turn to record</h2><p class="muted">Wait until the room is quiet, then press the button. Everyone gets ' + CFG.REC_SEC + ' seconds.</p>' +
+      '<button class="btn primary big" id="btn-record" data-act="want-record">' + (AE.micOk ? 'Record now' : 'Continue (no mic)') + '</button>';
+  }
+  const k1 = html; if (area.dataset.k !== k1) { area.dataset.k = k1; area.innerHTML = html; }
+  const rk = S.players.map(p => p.id + ':' + p.recorded + ':' + (S.recTurn === p.id) + ':' + p.connected).join(',');
+  if (roster.dataset.k !== rk) {
+    roster.dataset.k = rk;
+    roster.innerHTML = S.players.map(p => '<li class="pitem' + (p.connected ? '' : ' away') + '" style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span><span class="pname">' + esc(p.name) + '</span>' +
+      '<span class="chip ' + (p.recorded ? 'ok' : S.recTurn === p.id ? 'warn' : '') + '">' + (p.recorded ? 'Done ✓' : S.recTurn === p.id ? 'Recording…' : p.connected ? 'Waiting' : 'Left') + '</span></li>').join('');
+  }
+  if (me.isHost) {
+    const doneCount = S.players.filter(p => p.connected ? p.recorded : true).length, total = S.players.filter(p => p.connected).length;
+    if (!$('#rec-force')) area.insertAdjacentHTML('beforeend', '<p class="hint" id="rec-force-hint"></p><button class="btn small ghost" id="rec-force" data-act="force-record">Continue without stragglers</button>');
+    const fh = $('#rec-force-hint'); if (fh) fh.textContent = doneCount + ' of ' + total + ' recorded.';
   }
 }
 
@@ -1528,6 +1608,8 @@ function bindUI() {
     if (vic) { toHost({ t: 'sabotage', victim: vic.dataset.victim }); return; }
     if (e.target.closest('#btn-spin')) { toHost({ t: 'spin' }); return; }
     if (e.target.closest('#btn-next') && me.isHost) hostNext();
+    if (e.target.closest('[data-act="want-record"]')) { ensureCtx(); toHost({ t: 'want-record' }); return; }
+    if (e.target.closest('[data-act="force-record"]')) hostForceAdvanceRecording();
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && AE.ctx && AE.ctx.state === 'suspended') AE.ctx.resume().catch(() => {}); });
   window.addEventListener('beforeunload', () => { try { peer && peer.destroy(); } catch (e) {} });
