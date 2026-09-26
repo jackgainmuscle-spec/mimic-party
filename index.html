@@ -146,19 +146,6 @@ h1,h2,h3,p{margin:0}
 .rrow.on{border-color:var(--pc);background:rgba(255,255,255,.1)}
 .rname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .rscore{font-weight:800;font-size:1.1rem;min-width:2ch;text-align:right}
-.wheel-col{margin-top:1.2rem;display:grid;gap:.8rem;justify-items:center;text-align:center}
-.wheel-col h3{font-size:1.1rem;font-weight:800}
-.wheel-wrap{position:relative;width:min(72vw,270px);aspect-ratio:1;margin-top:.6rem}
-.pointer{position:absolute;top:-12px;left:50%;transform:translateX(-50%);border-left:14px solid transparent;border-right:14px solid transparent;border-top:26px solid var(--amber);z-index:2;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5))}
-.wheel{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#5b8cff 0 25%,#ff5c93 25% 50%,#ffc857 50% 75%,#5ef0c0 75% 100%);border:5px solid rgba(255,255,255,.25);box-shadow:0 10px 40px rgba(0,0,0,.4);transition:transform 4.4s cubic-bezier(.12,.7,.08,1)}
-.wheel::after{content:"";position:absolute;inset:37%;border-radius:50%;background:var(--ink);border:4px solid rgba(255,255,255,.2)}
-.seg{position:absolute;inset:0}
-.seg span{position:absolute;top:8%;left:50%;transform:translateX(-50%);width:84px;display:grid;justify-items:center;font-size:.72rem;font-weight:800;line-height:1.1;color:#170c22}
-.seg span em{font-style:normal;font-size:1.5rem}
-.wheel-ctl{display:grid;gap:.6rem;justify-items:center;width:100%}
-.victims{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
-.victims .btn{border-color:var(--pc)}
-.armed{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font-size:.88rem;color:var(--muted)}
 .next-slot{display:flex;align-items:center;justify-content:center;gap:1rem;margin-top:1.4rem;width:100%;flex-wrap:wrap}
 
 .dlg{color:var(--text);width:min(92vw,540px);padding:1.5rem;border:1px solid var(--line);border-radius:28px;background:rgba(26,19,56,.97);box-shadow:0 30px 80px rgba(0,0,0,.6)}
@@ -203,7 +190,6 @@ td.tot{font-weight:800;color:var(--amber)}
 @media (prefers-reduced-motion:reduce){
   .rec-dot,.dots i,.spinner,.toast,.bigscore,.cd.pop{animation:none}
   .c-player{animation:none;stroke-dashoffset:0}
-  .wheel{transition-duration:.5s}
   .ring{transition:none}
 }
 </style>
@@ -588,70 +574,6 @@ function sampleSeries(arr, n) { // time-normalised, JSON-safe series for drawing
 // ==== DSP:END
 
 /* ===================================================================
-   Sabotage effects (Web Audio nodes, rendered offline on the victim's recording)
-   =================================================================== */
-const FX = [
-  { id: 'echo',   name: 'Echo Chamber',  emoji: '🌀', color: '#5b8cff' },
-  { id: 'helium', name: 'Helium Squeak', emoji: '🎈', color: '#ff5c93' },
-  { id: 'choppy', name: 'Choppy Mute',   emoji: '✂️', color: '#ffc857' },
-  { id: 'robot',  name: 'Robot Crush',   emoji: '🤖', color: '#5ef0c0' }
-];
-const FXMAP = Object.fromEntries(FX.map(f => [f.id, f]));
-
-async function applyEffect(x, fx) {
-  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  const sr = CFG.SR, dur = x.length / sr;
-  const rate = fx === 'helium' ? 1.7 : 1, tail = fx === 'echo' ? 2.0 : 0;
-  const len = Math.max(Math.floor(sr * 0.2), Math.ceil((dur / rate + tail) * sr));
-  const oc = new OAC(1, len, sr);
-  const buf = oc.createBuffer(1, x.length, sr); buf.copyToChannel(x, 0);
-  const src = oc.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
-  let last = src;
-  const chain = (...nodes) => { for (const n of nodes) { last.connect(n); last = n; } };
-
-  if (fx === 'echo') {                          // DelayNode feedback loop + darker repeats
-    const dry = oc.createGain(); dry.gain.value = 1;
-    const dl = oc.createDelay(1); dl.delayTime.value = 0.28;
-    const fb = oc.createGain(); fb.gain.value = 0.6;
-    const tone = oc.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2800;
-    const wet = oc.createGain(); wet.gain.value = 0.9;
-    src.connect(dry); dry.connect(oc.destination);
-    src.connect(dl); dl.connect(tone); tone.connect(fb); fb.connect(dl); tone.connect(wet); wet.connect(oc.destination);
-  } else if (fx === 'helium') {                 // faster playback raises pitch; filters thin out the voice
-    const hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 380;
-    const sh = oc.createBiquadFilter(); sh.type = 'highshelf'; sh.frequency.value = 2800; sh.gain.value = 6;
-    const g = oc.createGain(); g.gain.value = 1.1;
-    chain(hp, sh, g); g.connect(oc.destination);
-  } else if (fx === 'choppy') {                 // GainNode gate opening and closing at random
-    const gate = oc.createGain(); gate.gain.value = 1;
-    let t = 0, open = Math.random() < 0.5;
-    while (t < len / sr) {
-      gate.gain.setTargetAtTime(open ? 1 : 0, t, 0.004);
-      t += open ? 0.07 + Math.random() * 0.12 : 0.08 + Math.random() * 0.16;
-      open = !open;
-    }
-    chain(gate); gate.connect(oc.destination);
-  } else if (fx === 'robot') {                  // quantiser + ring modulator + radio band-pass
-    const drive = oc.createGain(); drive.gain.value = 2.2;
-    const ws = oc.createWaveShaper(), levels = 6, curve = new Float32Array(2048);
-    for (let i = 0; i < 2048; i++) { const v = i / 1023.5 - 1; curve[i] = Math.round(v * levels) / levels; }
-    ws.curve = curve;
-    const ring = oc.createGain(); ring.gain.value = 0;
-    const osc = oc.createOscillator(); osc.type = 'sine'; osc.frequency.value = 60; osc.connect(ring.gain); osc.start(0);
-    const bp = oc.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.7;
-    const mk = oc.createGain(); mk.gain.value = 1.6;
-    chain(drive, ws, ring, bp, mk); mk.connect(oc.destination);
-  } else {
-    src.connect(oc.destination);
-  }
-  src.start(0);
-  const rendered = await oc.startRendering();
-  const y = new Float32Array(rendered.getChannelData(0));
-  if (fx === 'robot') { for (let i = 0; i < y.length; i++) { const k = i - (i % 3); if (i !== k) y[i] = y[k]; } } // sample-rate reduction
-  return y;
-}
-
-/* ===================================================================
    Audio engine: context, mic capture (raw PCM), playback, file decoding
    =================================================================== */
 const AE = { ctx: null, out: null, outAn: null, micStream: null, micSrc: null, micAn: null, recNode: null, recKind: '',
@@ -777,11 +699,11 @@ function sliceWindow(full, start) {
    =================================================================== */
 const COLORS = ['#ff5c93', '#5b8cff', '#ffc857', '#5ef0c0', '#b58cff', '#ff8a4c', '#4fd6ff', '#b6e64c'];
 const newState = () => ({ phase: 'lobby', hostId: null, players: [], clips: [], round: 0, totalRounds: 0, roundClip: null,
-  pending: [], spin: null, results: null, nowPlaying: null, revealed: [], recTurn: null, recNonce: 0 });
+  results: null, nowPlaying: null, revealed: [], recTurn: null, recNonce: 0 });
 let S = newState();
 const me = { id: null, isHost: false, name: '' };
 const UI = { screen: null, fatal: null, connMsg: 'Setting up your room…', roomLink: '', stageKey: '', shownPid: null, infoKey: '', pick: null,
-  wheelAngle: 0, recStart: 0, iv: null, joined: false, turnKey: '', localSub: null, localCount: 3 };
+  recStart: 0, iv: null, joined: false, turnKey: '', localSub: null, localCount: 3 };
 const LOCAL = { target: null, audio: {}, myClips: new Map() };  // per-device data (never in S)
 const H = { conns: new Map(), clips: new Map(), order: [], recs: new Map(), ready: new Set(), targetAn: null, run: 0, timers: [],
   forceAdvance: false, turnTimeoutId: null }; // host-only
@@ -800,7 +722,7 @@ if (!me.name) me.name = rand(ADJ) + ' ' + rand(ANI);
 function addPlayer(id, name, isHost) {
   const used = new Set(S.players.map(p => p.color));
   S.players.push({ id, name: cleanName(name) || 'Player', color: COLORS.find(c => !used.has(c)) || rand(COLORS), isHost: !!isHost,
-    mic: false, sound: false, connected: true, scores: [], total: 0, spins: 0, recorded: false });
+    mic: false, sound: false, connected: true, scores: [], total: 0, recorded: false });
 }
 
 /* ===================================================================
@@ -913,8 +835,6 @@ function hostHandle(conn, m) {
     case 'ready': if (m.round === S.round) H.ready.add(id); break;
     case 'want-record': hostWantRecord(id); break;
     case 'rec': if (m.round === S.round && S.phase === 'record') hostFinalizeRec(id, m.bytes && !m.none ? muDec(m.bytes) : null); break;
-    case 'spin': hostSpin(id); break;
-    case 'sabotage': hostSabotage(id, m.victim); break;
   }
 }
 
@@ -979,7 +899,6 @@ function clientHandle(m) {
     case 'go': playTarget(); break;
     case 'audio': LOCAL.audio[m.pid] = muDec(m.bytes); break;
     case 'play': playAudioOf(m.pid); break;
-    case 'spin-start': animateWheel(m.effect); break;
   }
 }
 function applyState(s) {
@@ -1008,15 +927,15 @@ async function waitFor(cond, ms, alive) {
 function hostStart() {
   if (S.phase !== 'lobby' || !S.clips.length) return;
   H.order = S.clips.map(c => c.id);
-  S.totalRounds = H.order.length; S.round = 0; S.pending = [];
-  for (const p of S.players) { p.scores = []; p.total = 0; p.spins = 0; }
+  S.totalRounds = H.order.length; S.round = 0;
+  for (const p of S.players) { p.scores = []; p.total = 0; }
   hostPlayRound();
 }
 
 async function hostPlayRound() {
   const run = ++H.run, alive = () => H.run === run;
   try {
-    S.round++; S.results = null; S.nowPlaying = null; S.revealed = []; S.spin = null; UI.pick = null;
+    S.round++; S.results = null; S.nowPlaying = null; S.revealed = []; UI.pick = null;
     H.recs.clear(); H.ready.clear(); LOCAL.audio = {};
     const clipId = H.order[S.round - 1], clip = H.clips.get(clipId), meta = S.clips.find(c => c.id === clipId);
     S.roundClip = { ownerName: meta ? meta.ownerName : 'someone', dur: clip.pcm.length / CFG.SR };
@@ -1048,18 +967,13 @@ async function hostPlayRound() {
 
 async function hostJudge(alive) {
   const tA = H.targetAn, kind = tA.voicedRatio >= 0.3 ? 'pitch' : 'energy';
-  const sab = {}; for (const s of S.pending) (sab[s.victim] = sab[s.victim] || []).push(s);
   const entries = [], audioOut = {};
   for (const p of S.players) {
-    const raw = H.recs.get(p.id), fx = sab[p.id] || [];
+    const raw = H.recs.get(p.id);
     let audio = null;
-    if (raw && raw.length > CFG.SR * 0.3) {
-      audio = raw;
-      for (const s of fx) { try { audio = await applyEffect(audio, s.effect); } catch (e) { console.warn('effect failed', e); } }
-      audio = normalize(audio);
-    }
+    if (raw && raw.length > CFG.SR * 0.3) audio = normalize(raw);
     const e = { id: p.id, score: 0, pitch: 0, rhythm: 0, tone: 0, silent: false, nomic: false, winner: false,
-      fx: fx.map(s => ({ effect: s.effect, by: s.by })), hasAudio: !!audio, dur: audio ? audio.length / CFG.SR : 0, contour: null, fb: '' };
+      hasAudio: !!audio, dur: audio ? audio.length / CFG.SR : 0, contour: null, fb: '' };
     if (!audio) { e.nomic = true; e.fb = p.connected ? 'No mic, no score. Turn it on next round.' : 'Left the building.'; }
     else {
       const a = analyze(audio), r = scorePlayer(tA, a);
@@ -1075,10 +989,8 @@ async function hostJudge(alive) {
     const p = player(e.id);
     p.scores[idx] = e.score; p.total = p.scores.reduce((a, b) => a + (b || 0), 0);
     e.winner = max > 0 && e.score === max;
-    if ((e.winner || e.score >= 80) && p.connected) p.spins = Math.min(2, p.spins + 1);   // winners and 80+ sharpshooters earn a spin
   }
   S.results = { round: S.round, kind, target: sampleSeries(kind === 'pitch' ? tA.pitch : tA.rms, 64), entries };
-  S.pending = [];
   for (const [pid, f] of Object.entries(audioOut)) {
     const enc = muEnc(f); LOCAL.audio[pid] = muDec(enc);
     await Promise.all(activeConns().map(c => sendBin(c, { t: 'audio', pid, round: S.round }, enc)));
@@ -1102,14 +1014,14 @@ async function hostPlayback(alive) {
 }
 
 function hostNext() {
-  if (S.phase !== 'results' || S.spin) return;
+  if (S.phase !== 'results') return;
   if (S.round >= S.totalRounds) { S.phase = 'final'; pushState(); } else hostPlayRound();
 }
 function hostToLobby() {
   H.run++; stopPlayback(); H.timers.forEach(clearTimeout); H.timers = []; clearTurnTimeout(); H.forceAdvance = false;
-  S.phase = 'lobby'; S.round = 0; S.totalRounds = 0; S.results = null; S.nowPlaying = null; S.revealed = []; S.pending = []; S.spin = null; S.roundClip = null; S.recTurn = null;
+  S.phase = 'lobby'; S.round = 0; S.totalRounds = 0; S.results = null; S.nowPlaying = null; S.revealed = []; S.roundClip = null; S.recTurn = null;
   S.players = S.players.filter(p => p.connected);
-  for (const p of S.players) { p.scores = []; p.total = 0; p.spins = 0; p.recorded = false; }
+  for (const p of S.players) { p.scores = []; p.total = 0; p.recorded = false; }
   pushState();
 }
 
@@ -1131,36 +1043,6 @@ function hostFinalizeRec(id, f) {
   pushState();
 }
 function hostForceAdvanceRecording() { if (me.isHost && S.phase === 'record') H.forceAdvance = true; }
-
-/* ---------- Sabotage wheel ---------- */
-function hostSpin(id) {
-  const p = player(id);
-  if (S.phase !== 'results' || S.spin || !p || p.spins < 1) return;
-  if (!S.players.some(x => x.id !== id && x.connected)) return;
-  p.spins--;
-  const effect = rand(FX).id, sid = uid();
-  S.spin = { id: sid, by: id, effect, stage: 'spinning' };
-  pushState(); broadcast({ t: 'spin-start', effect }); animateWheel(effect);
-  H.timers.push(setTimeout(() => { if (S.spin && S.spin.id === sid) { S.spin.stage = 'pick'; pushState(); } }, 4700));
-  H.timers.push(setTimeout(() => {   // auto-pick if the spinner dawdles or leaves
-    if (S.spin && S.spin.id === sid) { const riv = S.players.filter(x => x.id !== id && x.connected); if (riv.length) hostSabotage(id, rand(riv).id); }
-  }, 4700 + 20000));
-}
-function hostSabotage(from, victim) {
-  const sp = S.spin;
-  if (!sp || sp.by !== from || sp.stage !== 'pick') return;
-  const v = player(victim); if (!v || !v.connected || victim === from) return;
-  S.pending.push({ id: sp.id, victim, by: from, effect: sp.effect }); S.spin = null;
-  const f = FXMAP[sp.effect], text = nameOf(from) + ' hit ' + v.name + ' with ' + f.name + ' ' + f.emoji;
-  broadcast({ t: 'toast', text }); toast(text); pushState();
-}
-function animateWheel(effectId) {
-  const w = $('#wheel'); if (!w) return;
-  const k = FX.findIndex(f => f.id === effectId), c = k * 90 + 45, j = (Math.random() - .5) * 50;
-  const target = (((360 - c + j) % 360) + 360) % 360, cur = ((UI.wheelAngle % 360) + 360) % 360;
-  UI.wheelAngle += 360 * 5 + ((target - cur) + 360) % 360;
-  w.style.transform = 'rotate(' + UI.wheelAngle + 'deg)';
-}
 
 /* ---------- Per-device round actions ---------- */
 function playTarget() { if (LOCAL.target) playF32(LOCAL.target); }
@@ -1303,10 +1185,7 @@ function renderClips() {
 }
 
 function renderBanner() {
-  const b = $('#banner'), ph = S.phase, items = [];
-  const mine = S.pending.filter(s => s.victim === me.id);
-  if (mine.length && ['loading', 'listen', 'record'].includes(ph))
-    items.push('<div class="alert bad">😈 You were sabotaged: ' + mine.map(s => FXMAP[s.effect].emoji + ' ' + FXMAP[s.effect].name + ' from ' + esc(nameOf(s.by))).join(', ') + '. Your recording will be mangled.</div>');
+  const b = $('#banner'), items = [];
   if (!AE.ctx || AE.ctx.state !== 'running') items.push('<div class="alert"><span>Sound is off on this device.</span><button class="btn small" data-act="audio">Turn on sound</button></div>');
   else if (!AE.micOk) items.push('<div class="alert"><span>' + esc(AE.micErr || 'Your mic is off.') + ' You score 0 until it is on.</span><button class="btn small" data-act="audio">Enable mic</button></div>');
   b.hidden = !items.length; b.innerHTML = items.join('');
@@ -1334,10 +1213,6 @@ function renderStage() {
   if (ph === 'record') updateRecordStage();
   if (reveal && S.results) updateReveal();
 }
-function wheelHTML() {
-  const segs = FX.map((f, i) => '<div class="seg" style="transform:rotate(' + (i * 90 + 45) + 'deg)"><span><em>' + f.emoji + '</em>' + f.name + '</span></div>').join('');
-  return '<div class="wheel-wrap"><div class="pointer"></div><div class="wheel" id="wheel" style="transform:rotate(' + UI.wheelAngle + 'deg)">' + segs + '</div></div>';
-}
 function buildStage() {
   clearInterval(UI.iv);
   const st = $('#stage'), ph = S.phase;
@@ -1348,7 +1223,7 @@ function buildStage() {
   else if (ph === 'processing') html = '<h2 class="stage-title">Judging your noises</h2><p class="muted">Comparing pitch movement and rhythm…</p><div class="dots"><i></i><i></i><i></i></div>';
   else if (ph === 'playback' || ph === 'results') {
     html = '<div class="reveal-grid"><div><div id="contour-slot" class="contour-slot"></div><div id="np-info" class="np-info"></div></div>' +
-      '<div><ul id="rank" class="rank"></ul><div id="wheel-col" class="wheel-col" hidden><h3>Sabotage wheel</h3>' + wheelHTML() + '<div id="wheel-ctl" class="wheel-ctl"></div></div></div></div><div id="next-slot" class="next-slot"></div>';
+      '<div><ul id="rank" class="rank"></ul></div></div><div id="next-slot" class="next-slot"></div>';
     st.style.alignItems = 'stretch';
   }
   st.innerHTML = html;
@@ -1408,8 +1283,6 @@ function updateReveal() {
   } else pid = S.nowPlaying;
   if (pid !== UI.shownPid) { UI.shownPid = pid; UI.infoKey = ''; renderContour(pid); }
   renderInfo(pid); renderRank();
-  $('#wheel-col').hidden = !inRes;
-  if (inRes) updateWheelCtl();
   updateNext();
 }
 function renderContour(pid) {
@@ -1425,11 +1298,10 @@ function renderInfo(pid) {
   const shown = !!e && (S.phase === 'results' || S.revealed.includes(pid));
   const key = pid + '|' + shown; if (key === UI.infoKey) return; UI.infoKey = key;
   if (!e || !p) { box.innerHTML = ''; return; }
-  const fx = e.fx.map(f => '<span class="tag" style="--tc:' + FXMAP[f.effect].color + '">' + FXMAP[f.effect].emoji + ' ' + FXMAP[f.effect].name + ' from ' + esc(nameOf(f.by)) + '</span>').join('');
   const who = '<div class="who" style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span><strong>' + esc(p.name) + '</strong>' + (shown && e.winner ? '<span class="chip ok">Round winner</span>' : '') + '</div>';
-  if (!shown) { box.innerHTML = who + '<p class="muted">Listening…</p>' + (fx ? '<div class="tags">' + fx + '</div>' : ''); return; }
+  if (!shown) { box.innerHTML = who + '<p class="muted">Listening…</p>'; return; }
   const stats = e.nomic || e.silent ? '' : '<div class="stats">' + (res.kind === 'pitch' ? '<span>Pitch match ' + e.pitch + '%</span>' : '<span>Tone ' + e.tone + '%</span>') + '<span>Rhythm ' + e.rhythm + '%</span></div>';
-  box.innerHTML = who + '<div class="score-line"><span class="bigscore">' + e.score + '</span><span class="outof">out of 100</span></div><p class="fb">' + esc(e.fb) + '</p>' + stats + (fx ? '<div class="tags">' + fx + '</div>' : '');
+  box.innerHTML = who + '<div class="score-line"><span class="bigscore">' + e.score + '</span><span class="outof">out of 100</span></div><p class="fb">' + esc(e.fb) + '</p>' + stats;
 }
 function renderRank() {
   const res = S.results, inRes = S.phase === 'results';
@@ -1439,34 +1311,17 @@ function renderRank() {
   $('#rank').innerHTML = list.map(({ e, p }) => {
     const shown = inRes || S.revealed.includes(e.id);
     return '<li><button class="rrow' + (e.id === UI.shownPid ? ' on' : '') + '" ' + (inRes ? 'data-view="' + e.id + '"' : 'disabled') + ' style="--pc:' + p.color + '"><span class="avatar">' + ini(p) + '</span><span class="rname">' + esc(p.name) + '</span>' +
-      (inRes && p.spins > 0 ? '<span title="Has a sabotage spin">🎡</span>' : '') + '<span class="rscore">' + (shown ? e.score : '…') + '</span></button></li>';
+      '<span class="rscore">' + (shown ? e.score : '…') + '</span></button></li>';
   }).join('');
-}
-function updateWheelCtl() {
-  const el = $('#wheel-ctl'), mp = myPlayer(), sp = S.spin;
-  const rivals = S.players.filter(p => p.id !== me.id && p.connected);
-  let h = '';
-  if (sp) {
-    const f = FXMAP[sp.effect];
-    if (sp.stage === 'spinning') h = '<p>' + esc(nameOf(sp.by)) + ' is spinning…</p>';
-    else if (sp.by === me.id) h = '<p>You landed on <b>' + f.emoji + ' ' + f.name + '</b>. Pick a victim.</p><div class="victims">' + rivals.map(p => '<button class="btn" data-victim="' + p.id + '" style="--pc:' + p.color + '">' + esc(p.name) + '</button>').join('') + '</div>';
-    else h = '<p>' + esc(nameOf(sp.by)) + ' landed on <b>' + f.emoji + ' ' + f.name + '</b> and is choosing a victim.</p>';
-  } else if (mp && mp.spins > 0 && rivals.length) h = '<button class="btn primary" id="btn-spin">Spin the wheel (' + mp.spins + ')</button><p class="hint">You earned it. The next round is on someone else\'s mic.</p>';
-  else {
-    const who = S.players.filter(p => p.spins > 0).map(p => p.name);
-    h = who.length ? '<p class="hint">' + esc(who.join(', ')) + (who.length === 1 ? ' has' : ' have') + ' a spin.</p>' : '<p class="hint">Winners and anyone scoring 80+ earn a spin.</p>';
-  }
-  if (S.pending.length) h += '<ul class="armed">' + S.pending.map(s => '<li>' + FXMAP[s.effect].emoji + ' ' + FXMAP[s.effect].name + ' on ' + esc(nameOf(s.victim)) + ' (from ' + esc(nameOf(s.by)) + ')</li>').join('') + '</ul>';
-  const k = h; if (el.dataset.k === k) return; el.dataset.k = k; el.innerHTML = h;
 }
 function updateNext() {
   const el = $('#next-slot');
   if (S.phase !== 'results') { el.innerHTML = ''; el.dataset.k = ''; return; }
   const last = S.round >= S.totalRounds;
-  const key = me.isHost ? 'h|' + last + '|' + !!S.spin : 'c';
+  const key = me.isHost ? 'h|' + last : 'c';
   if (el.dataset.k === key) return; el.dataset.k = key;
   el.innerHTML = me.isHost
-    ? '<button class="btn primary big" id="btn-next"' + (S.spin ? ' disabled' : '') + '>' + (last ? 'See final results' : 'Start round ' + (S.round + 1)) + '</button>' + (S.spin ? '<span class="hint">Finish the sabotage spin first.</span>' : '')
+    ? '<button class="btn primary big" id="btn-next">' + (last ? 'See final results' : 'Start round ' + (S.round + 1)) + '</button>'
     : '<p class="hint">Waiting for the host to continue.</p>';
 }
 
@@ -1604,9 +1459,6 @@ function bindUI() {
   $('#stage').addEventListener('click', e => {
     const row = e.target.closest('[data-view]');
     if (row && S.phase === 'results') { UI.pick = row.dataset.view; ensureCtx(); playAudioOf(UI.pick); updateReveal(); return; }
-    const vic = e.target.closest('[data-victim]');
-    if (vic) { toHost({ t: 'sabotage', victim: vic.dataset.victim }); return; }
-    if (e.target.closest('#btn-spin')) { toHost({ t: 'spin' }); return; }
     if (e.target.closest('#btn-next') && me.isHost) hostNext();
     if (e.target.closest('[data-act="want-record"]')) { ensureCtx(); toHost({ t: 'want-record' }); return; }
     if (e.target.closest('[data-act="force-record"]')) hostForceAdvanceRecording();
