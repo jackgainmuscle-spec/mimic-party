@@ -118,7 +118,7 @@ h1,h2,h3,p{margin:0}
 @keyframes pulse{50%{transform:scale(.6);opacity:.5}}
 .bar{width:min(100%,420px);height:12px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
 .bar i{display:block;height:100%;background:#ff4560;transform-origin:left;transform:scaleX(0)}
-.meter.big{width:min(100%,420px);height:14px}
+.wave{width:min(100%,420px);height:92px;display:block;border-radius:16px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
 .rec-area{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;min-height:210px}
 .rec-roster{width:100%;max-width:460px;margin:0 auto}
 
@@ -1239,7 +1239,7 @@ function updateRecordStage() {
     html = '<h2 class="stage-title">You\'re done</h2><p class="muted">Waiting for everyone else to take their turn…</p><div class="dots"><i></i><i></i><i></i></div>';
   } else if (turnP && turnP.id === me.id) {
     if (UI.localSub === 'countdown') html = '<p class="muted">Get ready to copy it</p><div class="cd pop" id="cd" aria-live="assertive">' + UI.localCount + '</div>';
-    else if (UI.localSub === 'recording') html = '<div class="rec-badge" role="status"><i class="rec-dot"></i>RECORDING</div><div class="meter big" id="rec-meter"><i></i></div><div class="bar"><i id="recbar"></i></div><p class="muted">Copy the sound with your voice. Everyone else, stay quiet!</p>';
+    else if (UI.localSub === 'recording') html = '<div class="rec-badge" role="status"><i class="rec-dot"></i>RECORDING</div><canvas id="rec-wave" class="wave" aria-hidden="true"></canvas><div class="bar"><i id="recbar"></i></div><p class="muted">Copy the sound with your voice. Everyone else, stay quiet!</p>';
     else if (UI.localSub === 'nomic') html = '<h2 class="stage-title">No mic, no recording</h2><p class="muted">Your mic is off, so this turn is skipped. You will score 0 this round.</p><div class="dots"><i></i><i></i><i></i></div>';
     else html = '<h2 class="stage-title">Your turn</h2><p class="muted">Getting ready…</p><div class="dots"><i></i><i></i><i></i></div>';
   } else if (turnP) {
@@ -1334,6 +1334,23 @@ function renderFinal() {
 }
 
 /* ---------- Animation loop: level meters and recording bar ---------- */
+let waveBuf = null;
+function drawWave(canvas, an) {
+  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  if (!waveBuf || waveBuf.length !== an.fftSize) waveBuf = new Uint8Array(an.fftSize);
+  an.getByteTimeDomainData(waveBuf);
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = '#5ef0c0';
+  ctx.beginPath();
+  const n = waveBuf.length;
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1) * w, y = (waveBuf[i] / 255) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
 const lvlBuf = new Uint8Array(512);
 function levelOf(an) {
   an.getByteTimeDomainData(lvlBuf); let s = 0;
@@ -1344,7 +1361,7 @@ function tick() {
   if (!document.hidden) {
     const ring = $('#ring'); if (ring && AE.outAn) ring.style.setProperty('--lvl', levelOf(AE.outAn).toFixed(3));
     const mm = $('#mic-meter i'); if (mm && AE.micAn && UI.screen === 'lobby') mm.style.transform = 'scaleX(' + levelOf(AE.micAn).toFixed(3) + ')';
-    const rm = $('#rec-meter i'); if (rm && AE.micAn) rm.style.transform = 'scaleX(' + levelOf(AE.micAn).toFixed(3) + ')';
+    const wc = $('#rec-wave'); if (wc && AE.micAn) drawWave(wc, AE.micAn);
     const rb = $('#recbar'); if (rb) rb.style.transform = 'scaleX(' + clamp((performance.now() - UI.recStart) / (CFG.REC_SEC * 1000), 0, 1).toFixed(3) + ')';
   }
   requestAnimationFrame(tick);
