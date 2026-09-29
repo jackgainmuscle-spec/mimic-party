@@ -118,7 +118,7 @@ h1,h2,h3,p{margin:0}
 @keyframes pulse{50%{transform:scale(.6);opacity:.5}}
 .bar{width:min(100%,420px);height:12px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
 .bar i{display:block;height:100%;background:#ff4560;transform-origin:left;transform:scaleX(0)}
-.wave{width:min(100%,420px);height:92px;display:block;border-radius:16px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+.wave{width:min(100%,420px);height:92px;display:block;border-radius:999px;background:#07050f;border:2px solid var(--mint);box-shadow:0 0 22px rgba(94,240,192,.3),inset 0 0 20px rgba(0,0,0,.5)}
 .rec-area{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;min-height:210px}
 .rec-roster{width:100%;max-width:460px;margin:0 auto}
 
@@ -703,7 +703,7 @@ const newState = () => ({ phase: 'lobby', hostId: null, players: [], clips: [], 
 let S = newState();
 const me = { id: null, isHost: false, name: '' };
 const UI = { screen: null, fatal: null, connMsg: 'Setting up your room…', roomLink: '', stageKey: '', shownPid: null, infoKey: '', pick: null,
-  recStart: 0, iv: null, joined: false, turnKey: '', localSub: null, localCount: 3 };
+  recStart: 0, recBars: new Float32Array(56), iv: null, joined: false, turnKey: '', localSub: null, localCount: 3 };
 const LOCAL = { target: null, audio: {}, myClips: new Map() };  // per-device data (never in S)
 const H = { conns: new Map(), clips: new Map(), order: [], recs: new Map(), ready: new Set(), targetAn: null, run: 0, timers: [],
   forceAdvance: false, turnTimeoutId: null }; // host-only
@@ -1048,7 +1048,7 @@ function hostForceAdvanceRecording() { if (me.isHost && S.phase === 'record') H.
 function playTarget() { if (LOCAL.target) playF32(LOCAL.target); }
 function playAudioOf(pid) { const f = LOCAL.audio[pid]; if (f) playF32(f); }
 async function doRecord(round) {
-  UI.recStart = performance.now();
+  UI.recStart = performance.now(); UI.recBars.fill(0);
   let f = null;
   if (AE.micOk && AE.recNode) {
     try { ensureCtx(); f = resample(await recordPCM(CFG.REC_SEC), AE.ctx.sampleRate, CFG.SR); } catch (e) { console.warn(e); }
@@ -1334,22 +1334,28 @@ function renderFinal() {
 }
 
 /* ---------- Animation loop: level meters and recording bar ---------- */
-let waveBuf = null;
-function drawWave(canvas, an) {
+function hexLerp(a, b, t) {
+  const pa = [1, 3, 5].map(i => parseInt(a.substr(i, 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.substr(i, 2), 16));
+  return 'rgb(' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(',') + ')';
+}
+/* Mirrored bar waveform filling in as you record, pink-to-blue gradient, with a moving playhead. */
+function drawRecBars(canvas, bars, playFrac) {
   const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
   if (!w || !h) return;
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
-  if (!waveBuf || waveBuf.length !== an.fftSize) waveBuf = new Uint8Array(an.fftSize);
-  an.getByteTimeDomainData(waveBuf);
   const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
-  ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = '#5ef0c0';
-  ctx.beginPath();
-  const n = waveBuf.length;
+  const n = bars.length, gap = 2, bw = w / n, midY = h / 2;
   for (let i = 0; i < n; i++) {
-    const x = i / (n - 1) * w, y = (waveBuf[i] / 255) * h;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    const amp = clamp(bars[i], 0, 1), recorded = amp > 0.015;
+    const barH = recorded ? Math.max(4, amp * h * 0.92) : 2;
+    const x = i * bw + gap / 2, bwv = Math.max(1, bw - gap);
+    ctx.fillStyle = recorded ? hexLerp('#ff5c93', '#5b8cff', i / (n - 1)) : 'rgba(255,255,255,.14)';
+    const y = midY - barH / 2, r = Math.min(bwv, barH) / 2;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, bwv, barH, r); ctx.fill(); } else ctx.fillRect(x, y, bwv, barH);
   }
-  ctx.stroke();
+  const px = clamp(playFrac, 0, 1) * w;
+  ctx.strokeStyle = '#ff4560'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(px, 3); ctx.lineTo(px, h - 3); ctx.stroke();
 }
 const lvlBuf = new Uint8Array(512);
 function levelOf(an) {
@@ -1361,7 +1367,13 @@ function tick() {
   if (!document.hidden) {
     const ring = $('#ring'); if (ring && AE.outAn) ring.style.setProperty('--lvl', levelOf(AE.outAn).toFixed(3));
     const mm = $('#mic-meter i'); if (mm && AE.micAn && UI.screen === 'lobby') mm.style.transform = 'scaleX(' + levelOf(AE.micAn).toFixed(3) + ')';
-    const wc = $('#rec-wave'); if (wc && AE.micAn) drawWave(wc, AE.micAn);
+    const wc = $('#rec-wave');
+    if (wc && AE.micAn) {
+      const frac = clamp((performance.now() - UI.recStart) / (CFG.REC_SEC * 1000), 0, 1), n = UI.recBars.length;
+      const idx = Math.min(n - 1, Math.floor(frac * n));
+      UI.recBars[idx] = Math.max(UI.recBars[idx], levelOf(AE.micAn));
+      drawRecBars(wc, UI.recBars, frac);
+    }
     const rb = $('#recbar'); if (rb) rb.style.transform = 'scaleX(' + clamp((performance.now() - UI.recStart) / (CFG.REC_SEC * 1000), 0, 1).toFixed(3) + ')';
   }
   requestAnimationFrame(tick);
